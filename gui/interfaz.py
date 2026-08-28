@@ -74,29 +74,36 @@ class JuegoGUI:
         self.en_competencia = False
         self.jugadores_empate = None
 
-        # Botón tirar dado (se actualizará en dibujar_dashboard)
-        self.boton_tirar = None
         self.boton_hover = False
 
-        # ----- NUEVAS COORDENADAS -----
         self.dashboard_x = 20
         self.dashboard_y = 50
         self.dashboard_ancho = 300
-        self.dashboard_alto = 780   # deja margen inferior
+        self.dashboard_alto = 640   # igual al alto del tablero
 
-        self.dado_x = self.dashboard_x + 20
-        self.dado_y = self.dashboard_y + 10
+        # Posiciones relativas dentro del dashboard
+        self.margen_superior = 20
+        self.margen_lateral = 15
+        self.separacion = 10
+
+        # Mensaje
+        self.mensaje_x = self.dashboard_x + self.margen_lateral
+        self.mensaje_y = self.dashboard_y + self.margen_superior
+        self.mensaje_ancho = self.dashboard_ancho - 2*self.margen_lateral
+
+        # Dado
         self.dado_tam = 80
+        self.dado_x = self.dashboard_x + (self.dashboard_ancho - self.dado_tam) // 2
+        self.dado_y = self.mensaje_y + 100  # después del mensaje (dejamos espacio)
 
-        self.mensaje_x = self.dashboard_x + 15
-        self.mensaje_y = self.dado_y + self.dado_tam + 20
-        self.mensaje_ancho = self.dashboard_ancho - 30
-
-        self.jugadores_x = self.dashboard_x + 15
-        self.jugadores_y = self.mensaje_y + 70   # espacio para mensaje
+        # Jugadores
+        self.jugadores_x = self.dashboard_x + self.margen_lateral
+        self.jugadores_y = self.dado_y + self.dado_tam + 20
         self.jugador_cuadrante_w = 130
         self.jugador_cuadrante_h = 80
-        self.separacion = 10
+
+        # Botón tirar dado se calculará en dibujar_dashboard
+        self.boton_tirar = None
 
         self.tablero_x = 340
         self.tablero_y = 50
@@ -467,7 +474,7 @@ class JuegoGUI:
                 num = self.fuente_pequena.render(str(idx+1), True, (255, 255, 255))
                 self.ventana.blit(num, (cx + offset_x - 6, cy + offset_y - 8))
 
-    # ---------- DIBUJAR DASHBOARD (NUEVO) ----------
+    # --------- DIBUJAR DASHBOARD ----------
     def dibujar_dashboard(self):
         # Fondo del dashboard
         panel_rect = pygame.Rect(self.dashboard_x, self.dashboard_y,
@@ -475,26 +482,40 @@ class JuegoGUI:
         pygame.draw.rect(self.ventana, self.colores['dashboard_fondo'], panel_rect, border_radius=15)
         pygame.draw.rect(self.ventana, self.colores['dashboard_borde'], panel_rect, 3, border_radius=15)
 
-        # Dado
-        self._dibujar_dado(self.dado_x, self.dado_y, self.dado_tam)
-
-        # Mensaje play-by-play
+        # 1. Mensaje play-by-play (arriba)
         if self.mensaje:
             lineas = self._dividir_texto(self.mensaje, self.fuente_mediana, self.mensaje_ancho)
-            for i, linea in enumerate(lineas):
+            # Mostrar máximo 3 líneas
+            for i, linea in enumerate(lineas[:3]):
                 texto = self.fuente_mediana.render(linea, True, (235, 237, 240))
                 self.ventana.blit(texto, (self.mensaje_x, self.mensaje_y + i*30))
         else:
             texto = self.fuente_mediana.render("Esperando...", True, (200, 200, 210))
             self.ventana.blit(texto, (self.mensaje_x, self.mensaje_y))
 
-        # Jugadores en cuadrícula 2x2
+        # 2. Dado (centrado horizontalmente)
+        self._dibujar_dado(self.dado_x, self.dado_y, self.dado_tam)
+
+        # 3. Jugadores en cuadrícula 2x2
         if self.estado:
             num_jugadores = len(self.estado['posiciones'])
             cols = 2
-            filas = (num_jugadores + 1) // 2  # redondeo hacia arriba
+            filas = (num_jugadores + 1) // 2
             ancho_cuadrante = self.jugador_cuadrante_w
             alto_cuadrante = self.jugador_cuadrante_h
+
+            # Calcular espacio disponible vertical para jugadores y botón
+            espacio_disponible = self.dashboard_y + self.dashboard_alto - self.jugadores_y - 10
+            # Si hay botón, reservar 60px
+            if self.modo_juego == "interactivo" and not self.juego_terminado:
+                espacio_para_boton = 60
+            else:
+                espacio_para_boton = 0
+            espacio_para_jugadores = espacio_disponible - espacio_para_boton
+
+            # Ajustar alto de cuadrante si es necesario (pero no menos de 60)
+            alto_cuadrante = min(alto_cuadrante, (espacio_para_jugadores - (filas-1)*self.separacion) // filas)
+            alto_cuadrante = max(alto_cuadrante, 60)
 
             for i in range(num_jugadores):
                 fila = i // cols
@@ -523,9 +544,9 @@ class JuegoGUI:
                 texto_pos = self.fuente_pequena.render(f"Casilla: {pos}", True, (200, 200, 210))
                 self.ventana.blit(texto_pos, (rect.x + 10, rect.y + 45))
 
-            # Botón "Tirar Dado" (solo interactivo)
+            # 4. Botón "Tirar Dado" (solo interactivo)
             if self.modo_juego == "interactivo" and not self.juego_terminado:
-                boton_y = self.jugadores_y + filas * (alto_cuadrante + self.separacion) + 20
+                boton_y = self.jugadores_y + filas * (alto_cuadrante + self.separacion) + 5
                 self.boton_tirar = pygame.Rect(self.dashboard_x + 40, boton_y, 220, 50)
                 color_btn = self.colores['boton'] if not self.boton_hover else self.colores['boton_hover']
                 pygame.draw.rect(self.ventana, color_btn, self.boton_tirar, border_radius=15)
