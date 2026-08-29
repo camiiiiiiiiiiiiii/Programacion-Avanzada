@@ -113,6 +113,21 @@ class JuegoGUI:
         self.boton_continuar_reglas = pygame.Rect(1500//2 - 100, 780, 200, 50)
         self.boton_continuar_reglas_hover = False
 
+        # ----- COMPETENCIA -----
+        self.mostrando_competencia = False
+        self.competencia_jugadores = None      # (idx1, idx2)
+        self.competencia_dados = None          # (dado1, dado2) o None
+        self.competencia_ganador = None        # idx del ganador o None
+        self.competencia_resuelta = False
+        self.boton_tirar_competencia = pygame.Rect(0, 0, 200, 50)
+        self.boton_aceptar_competencia = pygame.Rect(0, 0, 200, 50)
+        self.tiempo_competencia = 0
+        self.tiempo_cierre_competencia = 0
+
+        # ----- SELECCIÓN DE CASTIGO (P1) -----
+        self.seleccionando_castigo = False
+        self.rects_cuadrantes = []   # para detectar clic en jugadores
+
     def ejecutar(self):
         while True:
             self.procesar_eventos()
@@ -180,6 +195,22 @@ class JuegoGUI:
         self.mensaje = f"¡Comienza el juego! Turno de {self.jugadores[0]}"
 
     def procesar_eventos_juego(self, evento):
+        # Si estamos en competencia, solo atender eventos del pop-up
+        if self.mostrando_competencia:
+            if evento.type == pygame.MOUSEBUTTONDOWN:
+                if not self.competencia_resuelta:
+                    if self.boton_tirar_competencia.collidepoint(evento.pos):
+                        self.resolver_competencia_popup()
+                else:
+                    if self.boton_aceptar_competencia.collidepoint(evento.pos):
+                        self.cerrar_competencia_popup()
+            if evento.type == pygame.KEYDOWN:
+                if evento.key == pygame.K_SPACE:
+                    if not self.competencia_resuelta:
+                        self.resolver_competencia_popup()
+                    else:
+                        self.cerrar_competencia_popup()
+            return  # No procesar otros eventos
         if self.modo_juego == "interactivo":
             if evento.type == pygame.MOUSEBUTTONDOWN:
                 if self.boton_tirar and self.boton_tirar.collidepoint(evento.pos) and not self.juego_terminado:
@@ -192,9 +223,22 @@ class JuegoGUI:
     def actualizar(self):
         if self.pantalla_actual == "juego" and self.modo_juego == "automatico" and not self.juego_terminado:
             ahora = pygame.time.get_ticks()
-            if ahora - self.tiempo_ultimo_auto > 1000:
-                self.tirar_dado()
-                self.tiempo_ultimo_auto = ahora
+            # Si no estamos en competencia ni seleccionando castigo, tirar dado automáticamente
+            if not self.mostrando_competencia and not self.seleccionando_castigo:
+                if ahora - self.tiempo_ultimo_auto > 1000:
+                    self.tirar_dado()
+                    self.tiempo_ultimo_auto = ahora
+            # Si estamos en competencia y no resuelta, resolver después del tiempo
+            if self.mostrando_competencia and not self.competencia_resuelta:
+                if ahora > self.tiempo_competencia:
+                    self.resolver_competencia_popup()
+                    # En automático, después de resolver, cerramos automáticamente después de otro segundo
+                    # Podemos programar el cierre automático
+                    self.tiempo_cierre_competencia = ahora + 1500
+            # Si ya está resuelta y modo automático, cerrar después del tiempo
+            if self.mostrando_competencia and self.competencia_resuelta:
+                if ahora > self.tiempo_cierre_competencia:
+                    self.cerrar_competencia_popup()
 
     # ---------- TIRAR DADO ----------
     def tirar_dado(self):
@@ -227,6 +271,28 @@ class JuegoGUI:
             return
 
         self.avanzar_turno()
+
+    def iniciar_competencia(self, idx_jugador):
+        estado = self.estado
+        posicion = estado['posiciones'][idx_jugador]
+        otro = None
+
+        for i, p in enumerate(estado['posiciones']):
+            if i != idx_jugador and p == posicion:
+                otro = i
+                break
+        if otro is None:
+            return
+
+        self.mostrando_competencia = True
+        self.competencia_jugadores = (idx_jugador, otro)
+        self.competencia_dados = None
+        self.competencia_ganador = None
+        self.competencia_resuelta = False
+
+        if self.modo_juego == "automatico":
+            # LE tuve que poner un delay xa que se vea quiénes compiten
+            self.tiempo_competencia = pygame.time.get_ticks() + 1500
 
     def resolver_competencia(self, idx_jugador):
         estado = self.estado
@@ -264,6 +330,35 @@ class JuegoGUI:
             estado = dict(estado, pierde_turno=tuple(nuevo_pierde))
             siguiente = (siguiente + 1) % total
         self.estado = dict(estado, actual=siguiente)
+
+    # Pop-up resolver competencia:
+    def resolver_competencia_popup(self):
+        idx1, idx2 = self.competencia_jugadores
+        dado1 = random.randint(1, 6)
+        dado2 = random.randint(1, 6)
+        self.competencia_dados = (dado1, dado2)
+
+        # LLamar a la lógica
+        nuevo_estado = juego.resolver_competencia(self.estado, idx1, idx2, dado1, dado2)
+        self.estado = nuevo_estado
+        self.competencia_resuelta = True
+
+        # Verificar si hubo empate
+        if nuevo_estado.get('competencia_empate', False):
+            self.competencia_ganador = None
+            self.mensaje = "Empate. Tirar de nuevo."
+            del self.estado['competencia_empate']
+        else:
+            # Dterminar gandor xa mostarlo en el pop-up
+
+            self.competencia_ganador = idx1 if dado1 > dado2 else idx2
+            self.mensaje = nuevo_estado.get('mensaje', "Competencia resuelta")
+
+    def cerrar_competencia_popup(self):
+        self.mostrando_competencia = False
+        idx = self.estado['actual'] # Jugador actual (el q generó la competencia)
+        self._procesar_turno(idx)
+
 
     # ---------- DIBUJO ----------
     def dibujar(self):
@@ -418,6 +513,9 @@ class JuegoGUI:
             msg_rect = msg.get_rect(center=(1500//2, 400))
             self.ventana.blit(msg, msg_rect)
 
+        if self.mostrando_competencia:
+            self.dibujar_popup_competencia()
+
     # ---------- DIBUJAR TABLERO ----------
     def dibujar_tablero(self):
         tablero_rect = pygame.Rect(self.tablero_x - 10, self.tablero_y - 10,
@@ -558,7 +656,16 @@ class JuegoGUI:
             self.ventana.blit(texto, (self.jugadores_x, self.jugadores_y))
 
     # ---------- DIBUJAR DADO (privado) ----------
-    def _dibujar_dado(self, x, y, tam):
+    def _dibujar_dado(self, x, y, tam, valor = None):
+        if valor is None:
+            # Mostrar "?"
+            dado_rect = pygame.Rect(x, y, tam, tam)
+            pygame.draw.rect(self.ventana, (200, 200, 200), dado_rect, border_radius=12)
+            pygame.draw.rect(self.ventana, (90, 98, 115), dado_rect, 3, border_radius=12)
+            texto = self.fuente_grande.render("?", True, (50, 50, 50))
+            self.ventana.blit(texto, (x + tam//2 - texto.get_width()//2, y + tam//2 - texto.get_height()//2))
+            return
+
         valor = 1
         if self.estado and self.estado.get('valor_del_dado') is not None:
             valor = self.estado['valor_del_dado']
@@ -579,6 +686,58 @@ class JuegoGUI:
             cx = x + tam//2 + dx
             cy = y + tam//2 + dy
             pygame.draw.circle(self.ventana, (35, 35, 40), (cx, cy), tam//10)
+
+    def dibujar_popup_competencia(self):
+        # Fondo semitransparente
+        s = pygame.Surface((1500, 900), pygame.SRCALPHA)
+        s.fill((0, 0, 0, 180))
+        self.ventana.blit(s, (0, 0))
+
+        popup_rect = pygame.Rect(400, 200, 700, 400)
+        pygame.draw.rect(self.ventana, (50, 55, 70), popup_rect, border_radius=20)
+        pygame.draw.rect(self.ventana, (200, 180, 100), popup_rect, 4, border_radius=20)
+
+        titulo = self.fuente_grande.render("¡COMPETENCIA!", True, (255, 215, 0))
+        self.ventana.blit(titulo, (popup_rect.x + popup_rect.w//2 - titulo.get_width()//2, popup_rect.y + 20))
+
+        if self.competencia_jugadores:
+            idx1, idx2 = self.competencia_jugadores
+            nombre1 = self.jugadores[idx1]
+            nombre2 = self.jugadores[idx2]
+            texto1 = self.fuente_mediana.render(nombre1, True, (235, 237, 240))
+            texto2 = self.fuente_mediana.render(nombre2, True, (235, 237, 240))
+            self.ventana.blit(texto1, (popup_rect.x + 80, popup_rect.y + 100))
+            self.ventana.blit(texto2, (popup_rect.x + popup_rect.w - 80 - texto2.get_width(), popup_rect.y + 100))
+
+            if self.competencia_dados:
+                dado1, dado2 = self.competencia_dados
+                self._dibujar_dado(popup_rect.x + 80, popup_rect.y + 160, 60, dado1)
+                self._dibujar_dado(popup_rect.x + popup_rect.w - 80 - 60, popup_rect.y + 160, 60, dado2)
+            else:
+                self._dibujar_dado(popup_rect.x + 80, popup_rect.y + 160, 60, None)
+                self._dibujar_dado(popup_rect.x + popup_rect.w - 80 - 60, popup_rect.y + 160, 60, None)
+
+            if self.competencia_resuelta:
+                if self.competencia_ganador is not None:
+                    ganador_nombre = self.jugadores[self.competencia_ganador]
+                    texto_res = self.fuente_mediana.render(f"¡{ganador_nombre} gana!", True, (100, 255, 100))
+                else:
+                    texto_res = self.fuente_mediana.render("Empate, tira de nuevo", True, (255, 200, 100))
+                self.ventana.blit(texto_res, (popup_rect.x + popup_rect.w//2 - texto_res.get_width()//2, popup_rect.y + 280))
+
+        # Botones
+        if not self.competencia_resuelta:
+            btn_rect = pygame.Rect(popup_rect.x + popup_rect.w//2 - 100, popup_rect.y + 330, 200, 50)
+            self.boton_tirar_competencia = btn_rect
+            pygame.draw.rect(self.ventana, (70, 75, 90), btn_rect, border_radius=15)
+            texto_btn = self.fuente_mediana.render("Tirar Dados", True, (235, 237, 240))
+            self.ventana.blit(texto_btn, (btn_rect.x + btn_rect.w//2 - texto_btn.get_width()//2, btn_rect.y + 10))
+        else:
+            btn_rect = pygame.Rect(popup_rect.x + popup_rect.w//2 - 100, popup_rect.y + 330, 200, 50)
+            self.boton_aceptar_competencia = btn_rect
+            pygame.draw.rect(self.ventana, (100, 200, 100), btn_rect, border_radius=15)
+            texto_btn = self.fuente_mediana.render("Aceptar", True, (235, 237, 240))
+            self.ventana.blit(texto_btn, (btn_rect.x + btn_rect.w//2 - texto_btn.get_width()//2, btn_rect.y + 10))
 
     # ---------- UTILIDAD ----------
     def _dividir_texto(self, texto, fuente, ancho_max):

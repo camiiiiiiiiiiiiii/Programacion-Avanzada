@@ -53,11 +53,17 @@ retrocede una más.'''
 def resolver_competencia(estado: dict, idx_jugador_1: int, idx_jugador_2: int, dado1: int, dado2: int) -> dict:
 
     if dado1 > dado2: # jugador 1 gana => queda en la misma posicion => cambio posición jugador 2
-        mover_jugador(idx_jugador_2, -2)
+        ganador, perdedor = idx_jugador_1, idx_jugador_2
     elif dado1 < dado2: # jugador 2 gana => queda en la misma posicion => cambio posición jugador 1
-        mover_jugador(idx_jugador_1, -2)
+        ganador, perdedor = idx_jugador_2, idx_jugador_1
     else:
-        resolver_competencia(estado, idx_jugador_1, idx_jugador_2, dado1, dado2) # VER DADOS CUANDO HAGAMOS INTERFAZ
+        return dict(estado, competencia_empate = True, mensaje = "Empate en competencia. Tirar de nuevo.")
+
+    nuevo_estado = mover_jugador(estado, ganador, perdedor, -2)
+
+    mensaje = f"Competencia: Jugador {ganador + 1} ({dado1}) vs Jugador {perdedor + 1} ({dado2}). Jugador {ganador + 1} gana!"
+
+    return dict(nuevo_estado, mensaje = mensaje)
 
 def checkear_si_hay_competencia(estado: dict, idx_jugador: int) -> bool:
     pos_actual = estado['posiciones'][idx_jugador]
