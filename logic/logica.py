@@ -163,9 +163,14 @@ def mover_y_aplicar_efecto(estado, idx, pasos, nuevo_dado=None, idx_castigado=No
     """
     Compone mover_jugador + aplicar_efecto_celda_especial.
     Primero mueve al jugador y, si la nueva posición es especial, aplica el efecto.
+    Si la celda es P2 y no se pasó nuevo_dado, lo genera automáticamente.
     """
     estado = mover_jugador(estado, idx, pasos)
     pos = estado['posiciones'][idx]
     if pos in CELDAS_ESPECIALES:
+        clave = CELDAS_ESPECIALES[pos]
+        # Si es P2 y no tenemos nuevo_dado, lo generamos
+        if clave == 'P2' and nuevo_dado is None:
+            nuevo_dado = random.randint(1, 6)
         estado = aplicar_efecto_celda_especial(estado, idx, nuevo_dado, idx_castigado)
     return estado

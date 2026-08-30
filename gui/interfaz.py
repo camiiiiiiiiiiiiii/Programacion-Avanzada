@@ -73,6 +73,7 @@ class JuegoGUI:
         self.tiempo_ultimo_auto = 0
         self.en_competencia = False
         self.jugadores_empate = None
+        self.tiempo_proxima_accion = 0
 
         self.boton_hover = False
 
@@ -121,8 +122,6 @@ class JuegoGUI:
         self.competencia_resuelta = False
         self.boton_tirar_competencia = pygame.Rect(0, 0, 200, 50)
         self.boton_aceptar_competencia = pygame.Rect(0, 0, 200, 50)
-        self.tiempo_competencia = 0
-        self.tiempo_cierre_competencia = 0
 
         # ----- SELECCIÓN DE CASTIGO (P1) -----
         self.seleccionando_castigo = False
@@ -199,11 +198,9 @@ class JuegoGUI:
         if self.mostrando_competencia:
             if evento.type == pygame.MOUSEBUTTONDOWN:
                 if not self.competencia_resuelta:
-                    # Botón "Tirar Dados"
                     if self.boton_tirar_competencia.collidepoint(evento.pos):
                         self.resolver_competencia_popup()
                 else:
-                    # Botón "Aceptar"
                     if self.boton_aceptar_competencia.collidepoint(evento.pos):
                         self.cerrar_competencia_popup()
             if evento.type == pygame.KEYDOWN:
@@ -241,24 +238,26 @@ class JuegoGUI:
 
     # ---------- ACTUALIZAR ----------
     def actualizar(self):
-        if self.pantalla_actual == "juego" and self.modo_juego == "automatico" and not self.juego_terminado:
+        if self.pantalla_actual == "juego":
             ahora = pygame.time.get_ticks()
-            # Si no estamos en competencia ni seleccionando castigo, tirar dado automáticamente
-            if not self.mostrando_competencia and not self.seleccionando_castigo:
-                if ahora - self.tiempo_ultimo_auto > 1000:
-                    self.tirar_dado()
-                    self.tiempo_ultimo_auto = ahora
-            # Si estamos en competencia y no resuelta, resolver después del tiempo
-            if self.mostrando_competencia and not self.competencia_resuelta:
-                if ahora > self.tiempo_competencia:
-                    self.resolver_competencia_popup()
-                    # En automático, después de resolver, cerramos automáticamente después de otro segundo
-                    # Podemos programar el cierre automático
-                    self.tiempo_cierre_competencia = ahora + 1500
-            # Si ya está resuelta y modo automático, cerrar después del tiempo
-            if self.mostrando_competencia and self.competencia_resuelta:
-                if ahora > self.tiempo_cierre_competencia:
-                    self.cerrar_competencia_popup()
+
+            # --- Lógica automática de tiro de dado (fuera de competencia) ---
+            if self.modo_juego == "automatico" and not self.juego_terminado:
+                if not self.mostrando_competencia and not self.seleccionando_castigo:
+                    if ahora - self.tiempo_ultimo_auto > 1000:
+                        self.tirar_dado()
+                        self.tiempo_ultimo_auto = ahora
+
+            # --- Lógica automática de competencia ---
+            if self.mostrando_competencia:
+                if not self.competencia_resuelta:
+                    # Empate o aún no se tiró: programar nuevo tiro
+                    if ahora > self.tiempo_proxima_accion:
+                        self.resolver_competencia_popup()
+                else:
+                    # Ya hay ganador: programar cierre
+                    if ahora > self.tiempo_proxima_accion:
+                        self.cerrar_competencia_popup()
 
     # ---------- TIRAR DADO ----------
     def tirar_dado(self):
@@ -318,51 +317,79 @@ class JuegoGUI:
         self.competencia_dados = None
         self.competencia_ganador = None
         self.competencia_resuelta = False
+        self.mensaje = f"¡Competencia! {self.jugadores[idx_jugador]} vs {self.jugadores[otro]}"
+
+        # --- Definir rectángulos del pop‑up y botones ---
+        popup_ancho = 700
+        popup_alto = 400
+        self.popup_competencia_rect = pygame.Rect(
+            1500//2 - popup_ancho//2,
+            900//2 - popup_alto//2,
+            popup_ancho,
+            popup_alto
+        )
+        self.boton_tirar_competencia = pygame.Rect(
+            self.popup_competencia_rect.centerx - 100,
+            self.popup_competencia_rect.bottom - 70,
+            200, 50
+        )
+        self.boton_aceptar_competencia = pygame.Rect(
+            self.popup_competencia_rect.centerx - 100,
+            self.popup_competencia_rect.bottom - 70,
+            200, 50
+        )
 
         if self.modo_juego == "automatico":
-            # LE tuve que poner un delay xa que se vea quiénes compiten
-            self.tiempo_competencia = pygame.time.get_ticks() + 1500
+            self.tiempo_proxima_accion = pygame.time.get_ticks() + 1500
 
-    def resolver_competencia(self, idx_jugador):
-        estado = self.estado
-        pos = estado['posiciones'][idx_jugador]
-        otro = None
-        for i, p in enumerate(estado['posiciones']):
-            if i != idx_jugador and p == pos:
-                otro = i
-                break
-        if otro is None:
-            return
-
-        dado1 = random.randint(1, 6)
-        dado2 = random.randint(1, 6)
-        self.mensaje = f"Competencia: J{idx_jugador+1} ({dado1}) vs J{otro+1} ({dado2})"
-
-        nuevo_estado = juego.resolver_competencia(estado, idx_jugador, otro, dado1, dado2)
-        self.estado = nuevo_estado
-
-        if nuevo_estado.get('competencia_empate', False):
-            self.mensaje = "Empate, se repite la competencia"
-            self.resolver_competencia(idx_jugador)
-        else:
-            self.mensaje = nuevo_estado.get('mensaje', self.mensaje)
+    # def resolver_competencia(self, idx_jugador):
+    #     estado = self.estado
+    #     pos = estado['posiciones'][idx_jugador]
+    #     otro = None
+    #     for i, p in enumerate(estado['posiciones']):
+    #         if i != idx_jugador and p == pos:
+    #             otro = i
+    #             break
+    #     if otro is None:
+    #         return
+    #
+    #     dado1 = random.randint(1, 6)
+    #     dado2 = random.randint(1, 6)
+    #     self.mensaje = f"Competencia: J{idx_jugador+1} ({dado1}) vs J{otro+1} ({dado2})"
+    #
+    #     nuevo_estado = juego.resolver_competencia(estado, idx_jugador, otro, dado1, dado2)
+    #     self.estado = nuevo_estado
+    #
+    #     if nuevo_estado.get('competencia_empate', False):
+    #         self.mensaje = "Empate, se repite la competencia"
+    #         self.resolver_competencia(idx_jugador)
+    #     else:
+    #         self.mensaje = nuevo_estado.get('mensaje', self.mensaje)
 
     def avanzar_turno(self):
         estado = self.estado
-        # Crear un generador que empiece desde el actual
-        gen = juego.generador_turnos(estado)
-        # Consumimos hasta que el siguiente sea distinto al actual (o hasta que sea el mismo, pero ya lo saltamos)
-        siguiente = None
-        for _ in range(len(estado['posiciones']) + 1):  # límite de seguridad
-            sig = next(gen)
-            if sig != estado['actual']:
-                siguiente = sig
-                break
-        if siguiente is not None:
-            self.estado = dict(estado, actual=siguiente)
-        else:
-            # Si no se encuentra (no debería pasar), nos quedamos con el mismo
-            pass
+        total = len(estado['posiciones'])
+        siguiente = estado['actual']
+
+        # Resetear flag del jugador actual si pierde el turno
+        if estado['pierde_turno'][siguiente]:
+            nuevo_pierde = list(estado['pierde_turno'])
+            nuevo_pierde[siguiente] = False
+            estado = dict(estado, pierde_turno=tuple(nuevo_pierde))
+
+        # Buscar siguiente jugador que no pierde turno
+        for _ in range(total):
+            siguiente = (siguiente + 1) % total
+            if not estado['pierde_turno'][siguiente]:
+                self.estado = dict(estado, actual=siguiente)
+                self.mensaje = f"Turno de {self.jugadores[siguiente]}"
+                return
+            else:
+                # Resetear flag del jugador que se salta
+                nuevo_pierde = list(estado['pierde_turno'])
+                nuevo_pierde[siguiente] = False
+                estado = dict(estado, pierde_turno=tuple(nuevo_pierde))
+        # Si no se encuentra (caso raro), no hacemos nada
 
     # Pop-up resolver competencia:
     def resolver_competencia_popup(self):
@@ -371,45 +398,31 @@ class JuegoGUI:
         dado2 = random.randint(1, 6)
         self.competencia_dados = (dado1, dado2)
 
-        # Llamamos a la lógica pura
         nuevo_estado = juego.resolver_competencia(self.estado, idx1, idx2, dado1, dado2)
         self.estado = nuevo_estado
 
-        # Verificamos si hubo empate
         if self.estado.get('competencia_empate', False):
-            # --- EMPATE ---
-            # No se considera resuelta, el pop-up sigue abierto
+            # Empate
             self.competencia_resuelta = False
             self.competencia_ganador = None
             self.mensaje = "¡Empate! Vuelvan a tirar."
-            # Eliminamos la marca del estado para que no quede
             del self.estado['competencia_empate']
-
-            # Si es automático, programamos el próximo reintento
             if self.modo_juego == "automatico":
                 self.tiempo_proxima_accion = pygame.time.get_ticks() + 1500
-            # Si es interactivo, el usuario deberá hacer clic en "Tirar de nuevo"
         else:
-            # --- GANADOR ---
+            # Ganador
             self.competencia_resuelta = True
-            # Determinamos el ganador según los dados (la lógica ya movió al perdedor)
-            if dado1 > dado2:
-                self.competencia_ganador = idx1
-            else:
-                self.competencia_ganador = idx2
+            self.competencia_ganador = idx1 if dado1 > dado2 else idx2
             self.mensaje = nuevo_estado.get('mensaje', "Competencia resuelta")
-
-            # Si es automático, programamos el cierre del pop-up
             if self.modo_juego == "automatico":
                 self.tiempo_proxima_accion = pygame.time.get_ticks() + 2000
 
     def cerrar_competencia_popup(self):
         self.mostrando_competencia = False
-        # Solo avanzamos el turno si realmente hubo un ganador.
-        # (En caso de empate, esta función no se debería llamar porque el botón es "Tirar Dados")
         if self.competencia_ganador is not None:
+            # Avanzar turno y actualizar mensaje
             self.avanzar_turno()
-        # Limpiamos variables por seguridad
+        # Limpiar variables
         self.competencia_jugadores = None
         self.competencia_dados = None
         self.competencia_ganador = None
@@ -820,12 +833,12 @@ class JuegoGUI:
         s.fill((0, 0, 0, 180))
         self.ventana.blit(s, (0, 0))
 
-        popup_rect = pygame.Rect(400, 200, 700, 400)
-        pygame.draw.rect(self.ventana, (50, 55, 70), popup_rect, border_radius=20)
-        pygame.draw.rect(self.ventana, (200, 180, 100), popup_rect, 4, border_radius=20)
+        # Pop‑up
+        pygame.draw.rect(self.ventana, (50, 55, 70), self.popup_competencia_rect, border_radius=20)
+        pygame.draw.rect(self.ventana, (200, 180, 100), self.popup_competencia_rect, 4, border_radius=20)
 
         titulo = self.fuente_grande.render("¡COMPETENCIA!", True, (255, 215, 0))
-        self.ventana.blit(titulo, (popup_rect.x + popup_rect.w//2 - titulo.get_width()//2, popup_rect.y + 20))
+        self.ventana.blit(titulo, (self.popup_competencia_rect.centerx - titulo.get_width()//2, self.popup_competencia_rect.y + 20))
 
         if self.competencia_jugadores:
             idx1, idx2 = self.competencia_jugadores
@@ -833,16 +846,16 @@ class JuegoGUI:
             nombre2 = self.jugadores[idx2]
             texto1 = self.fuente_mediana.render(nombre1, True, (235, 237, 240))
             texto2 = self.fuente_mediana.render(nombre2, True, (235, 237, 240))
-            self.ventana.blit(texto1, (popup_rect.x + 80, popup_rect.y + 100))
-            self.ventana.blit(texto2, (popup_rect.x + popup_rect.w - 80 - texto2.get_width(), popup_rect.y + 100))
+            self.ventana.blit(texto1, (self.popup_competencia_rect.x + 80, self.popup_competencia_rect.y + 100))
+            self.ventana.blit(texto2, (self.popup_competencia_rect.x + self.popup_competencia_rect.w - 80 - texto2.get_width(), self.popup_competencia_rect.y + 100))
 
             if self.competencia_dados:
                 dado1, dado2 = self.competencia_dados
-                self._dibujar_dado(popup_rect.x + 80, popup_rect.y + 160, 60, dado1)
-                self._dibujar_dado(popup_rect.x + popup_rect.w - 80 - 60, popup_rect.y + 160, 60, dado2)
+                self._dibujar_dado(self.popup_competencia_rect.x + 80, self.popup_competencia_rect.y + 160, 60, dado1)
+                self._dibujar_dado(self.popup_competencia_rect.x + self.popup_competencia_rect.w - 80 - 60, self.popup_competencia_rect.y + 160, 60, dado2)
             else:
-                self._dibujar_dado(popup_rect.x + 80, popup_rect.y + 160, 60, None)
-                self._dibujar_dado(popup_rect.x + popup_rect.w - 80 - 60, popup_rect.y + 160, 60, None)
+                self._dibujar_dado(self.popup_competencia_rect.x + 80, self.popup_competencia_rect.y + 160, 60, None)
+                self._dibujar_dado(self.popup_competencia_rect.x + self.popup_competencia_rect.w - 80 - 60, self.popup_competencia_rect.y + 160, 60, None)
 
         # Mostrar mensaje de resultado
         if self.competencia_resuelta:
@@ -851,45 +864,20 @@ class JuegoGUI:
                 texto_res = self.fuente_mediana.render(f"¡{ganador_nombre} gana!", True, (100, 255, 100))
             else:
                 texto_res = self.fuente_mediana.render("Empate, tira de nuevo", True, (255, 200, 100))
-            self.ventana.blit(texto_res, (popup_rect.x + popup_rect.w//2 - texto_res.get_width()//2, popup_rect.y + 280))
+            self.ventana.blit(texto_res, (self.popup_competencia_rect.x + self.popup_competencia_rect.w//2 - texto_res.get_width()//2, self.popup_competencia_rect.y + 280))
 
         # --- BOTONES ---
+        # Botón según estado
         if not self.competencia_resuelta:
-            # Aún no hay ganador → mostramos "Tirar Dados" (o "Reintentar")
-            btn_rect = pygame.Rect(popup_rect.x + popup_rect.w//2 - 100, popup_rect.y + 330, 200, 50)
-            self.boton_tirar_competencia = btn_rect
-            pygame.draw.rect(self.ventana, (70, 75, 90), btn_rect, border_radius=15)
+            pygame.draw.rect(self.ventana, (70, 75, 90), self.boton_tirar_competencia, border_radius=15)
             texto_btn = self.fuente_mediana.render("Tirar Dados", True, (235, 237, 240))
-            self.ventana.blit(texto_btn, (btn_rect.x + btn_rect.w//2 - texto_btn.get_width()//2, btn_rect.y + 10))
+            self.ventana.blit(texto_btn, (self.boton_tirar_competencia.centerx - texto_btn.get_width()//2,
+                                          self.boton_tirar_competencia.y + 10))
         else:
-            # Ya hay ganador → mostramos "Aceptar"
-            btn_rect = pygame.Rect(popup_rect.x + popup_rect.w//2 - 100, popup_rect.y + 330, 200, 50)
-            self.boton_aceptar_competencia = btn_rect
-            pygame.draw.rect(self.ventana, (100, 200, 100), btn_rect, border_radius=15)
+            pygame.draw.rect(self.ventana, (100, 200, 100), self.boton_aceptar_competencia, border_radius=15)
             texto_btn = self.fuente_mediana.render("Aceptar", True, (235, 237, 240))
-            self.ventana.blit(texto_btn, (btn_rect.x + btn_rect.w//2 - texto_btn.get_width()//2, btn_rect.y + 10))
-
-    def actualizar(self):
-        if self.pantalla_actual == "juego":
-            ahora = pygame.time.get_ticks()
-
-            # --- Lógica automática de tiro de dado (fuera de competencia) ---
-            if self.modo_juego == "automatico" and not self.juego_terminado:
-                if not self.mostrando_competencia and not self.seleccionando_castigo:
-                    if ahora - self.tiempo_ultimo_auto > 1000:
-                        self.tirar_dado()
-                        self.tiempo_ultimo_auto = ahora
-
-            # --- Lógica automática de competencia ---
-            if self.mostrando_competencia:
-                if not self.competencia_resuelta:
-                    # Empate o aún no se tiró: programar nuevo tiro
-                    if ahora > self.tiempo_proxima_accion:
-                        self.resolver_competencia_popup()
-                else:
-                    # Ya hay ganador: programar cierre
-                    if ahora > self.tiempo_proxima_accion:
-                        self.cerrar_competencia_popup()
+            self.ventana.blit(texto_btn, (self.boton_aceptar_competencia.centerx - texto_btn.get_width()//2,
+                                          self.boton_aceptar_competencia.y + 10))
 
     # ---------- UTILIDAD ----------
     def _dividir_texto(self, texto, fuente, ancho_max):
