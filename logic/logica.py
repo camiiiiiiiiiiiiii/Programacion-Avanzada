@@ -38,7 +38,7 @@ def mover_jugador(estado: dict, idx_jugador: int, pasos_a_avanzar: int) -> dict:
     nuevo_estado = dict(estado, posiciones = tuple(nuevas_posiciones))
 
     # Caso especial al retroceder dps de competencia:
-    if (pasos_a_avanzar == -1) and checkear_si_hay_competencia(nuevo_estado, idx_jugador): # estoy retrocediendo, tengo que mirar si caigo donde hay otro. en ese caso voy otro para atrás
+    if (pasos_a_avanzar < 0) and checkear_si_hay_competencia(nuevo_estado, idx_jugador): # estoy retrocediendo, tengo que mirar si caigo donde hay otro. en ese caso voy otro para atrás
         return mover_jugador(nuevo_estado, idx_jugador, -1)
 
     return nuevo_estado

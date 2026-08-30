@@ -3,6 +3,7 @@
   <component name="NewModuleRootManager" inherit-compiler-output="true">
     <exclude-output />
     <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/.venv" />
     </content>
     <orderEntry type="jdk" jdkName="~/Library/CloudStorage/GoogleDrive-parket453@gmail.com/My Drive/*Sem6/Programación Avanzada/IntelliJEntregable1/.venv" jdkType="Python SDK" />
