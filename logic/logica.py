@@ -28,6 +28,10 @@ def mover_jugador(estado: dict, idx_jugador: int, pasos_a_avanzar: int) -> dict:
     if nueva_posicion > PUNTUACION_PARA_GANAR:
         nueva_posicion = PUNTUACION_PARA_GANAR
 
+    # Caso especial: retroceder hasta casillas negativas. No puede pasar
+    if nueva_posicion < 0:
+        nueva_posicion = 0
+
     # Comprensión: reconstruimos todas las posiciones
     nuevas_posiciones = tuple(
         nueva_posicion if i == idx_jugador else p

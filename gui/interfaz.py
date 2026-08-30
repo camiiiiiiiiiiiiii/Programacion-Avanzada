@@ -248,6 +248,10 @@ class JuegoGUI:
                         self.tirar_dado()
                         self.tiempo_ultimo_auto = ahora
 
+            if self.mostrando_competencia and self.modo_juego == "interactivo":
+                # No hacer nada automático en modo interactivo
+                pass
+
             # --- Lógica automática de competencia ---
             if self.mostrando_competencia:
                 if not self.competencia_resuelta:
@@ -280,10 +284,13 @@ class JuegoGUI:
             self.iniciar_seleccion_castigo(idx)
             return
         else:
-            # Usamos la composición para el resto (incluye movimiento + efecto)
             self.estado = juego.mover_y_aplicar_efecto(estado, idx, dado)
             self.estado['valor_del_dado'] = dado
-            self.mensaje = self.estado.get('mensaje', f"Jugador {idx+1} sacó {dado}")
+            mensaje_estado = self.estado.get('mensaje')
+            if mensaje_estado:
+                self.mensaje = mensaje_estado
+            else:
+                self.mensaje = f"Jugador {idx+1} sacó {dado}"
 
         # Verificar competencia
         if juego.checkear_si_hay_competencia(self.estado, idx):
@@ -371,25 +378,24 @@ class JuegoGUI:
         total = len(estado['posiciones'])
         siguiente = estado['actual']
 
-        # Resetear flag del jugador actual si pierde el turno
+        # 1. Resetear flag del jugador actual si pierde el turno
         if estado['pierde_turno'][siguiente]:
             nuevo_pierde = list(estado['pierde_turno'])
             nuevo_pierde[siguiente] = False
             estado = dict(estado, pierde_turno=tuple(nuevo_pierde))
 
-        # Buscar siguiente jugador que no pierde turno
+        # 2. Buscar el siguiente jugador que pueda jugar
         for _ in range(total):
             siguiente = (siguiente + 1) % total
             if not estado['pierde_turno'][siguiente]:
                 self.estado = dict(estado, actual=siguiente)
-                self.mensaje = f"Turno de {self.jugadores[siguiente]}"
+                # NO SOBRESCRIBIMOS self.mensaje AQUÍ
                 return
             else:
                 # Resetear flag del jugador que se salta
                 nuevo_pierde = list(estado['pierde_turno'])
                 nuevo_pierde[siguiente] = False
                 estado = dict(estado, pierde_turno=tuple(nuevo_pierde))
-        # Si no se encuentra (caso raro), no hacemos nada
 
     # Pop-up resolver competencia:
     def resolver_competencia_popup(self):
@@ -453,7 +459,9 @@ class JuegoGUI:
         """Aplica el castigo al jugador seleccionado."""
         idx_jugador = self.jugador_castigador
         self.estado = juego.aplicar_efecto_celda_especial(self.estado, idx_jugador, idx_castigado=idx_castigado)
-        self.mensaje = self.estado.get('mensaje', self.mensaje)
+        mensaje_estado = self.estado.get('mensaje')
+        if mensaje_estado:
+            self.mensaje = mensaje_estado
         self.seleccionando_castigo = False
         # Verificar si el jugador actual ganó (aunque no se movió, por si acaso)
         if self.estado['posiciones'][idx_jugador] >= PUNTUACION_PARA_GANAR:
