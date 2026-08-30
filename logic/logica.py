@@ -18,32 +18,37 @@ def estado_inicial(cant_jugadores: int) -> dict:
 
 # Movimiento:
 @log
-def mover_jugador(estado: dict, idx_jugador: int, pasos_a_avanzar: int) -> dict:
-    # Calculo la nueva posición usando la anterior y los pasos a avanzar que se obtuvieron en el dado
-    nueva_posicion = estado['posiciones'][idx_jugador] + pasos_a_avanzar
+def mover_jugador(estado: dict, idx_jugador: int, pasos_a_avanzar: int, profundidad: int = 0) -> dict:
+
 
     ''' Caso especial: si nos pasamos de las 35 casillas, significa que el jugador ganó.
         Decidimos que el programa tome la posición 35 para indicar que el jugador ganó,
         por lo que debemos setear la posición en 35.'''
-    if nueva_posicion > PUNTUACION_PARA_GANAR:
-        nueva_posicion = PUNTUACION_PARA_GANAR
+    # Evitar recursión infinita
+    if profundidad > 50:
+        # Si llegamos a este límite, devolvemos el estado actual sin más cambios
+        return estado
 
-    # Caso especial: retroceder hasta casillas negativas. No puede pasar
+    # Calculo la nueva posición usando la anterior y los pasos a avanzar
+    nueva_posicion = estado['posiciones'][idx_jugador] + pasos_a_avanzar
+
+    # Ajustar límites (0 mínimo, PUNTUACION_PARA_GANAR máximo)
     if nueva_posicion < 0:
         nueva_posicion = 0
+    elif nueva_posicion > PUNTUACION_PARA_GANAR:
+        nueva_posicion = PUNTUACION_PARA_GANAR
 
-    # Comprensión: reconstruimos todas las posiciones
+    # Reconstruir posiciones
     nuevas_posiciones = tuple(
         nueva_posicion if i == idx_jugador else p
         for i, p in enumerate(estado['posiciones'])
     )
+    nuevo_estado = dict(estado, posiciones=tuple(nuevas_posiciones))
 
-    # devolvemso el diccionario estado que pasamos como input a la funcion, pero ahora con las nuevas posiciones
-    nuevo_estado = dict(estado, posiciones = tuple(nuevas_posiciones))
-
-    # Caso especial al retroceder dps de competencia:
-    if (pasos_a_avanzar < 0) and checkear_si_hay_competencia(nuevo_estado, idx_jugador): # estoy retrocediendo, tengo que mirar si caigo donde hay otro. en ese caso voy otro para atrás
-        return mover_jugador(nuevo_estado, idx_jugador, -1)
+    # Caso especial: retroceso y caída en casilla ocupada
+    # Solo si el retroceso fue negativo y la nueva posición NO es 0 (no se puede seguir retrocediendo)
+    if (pasos_a_avanzar < 0) and (nueva_posicion > 0) and checkear_si_hay_competencia(nuevo_estado, idx_jugador):
+        return mover_jugador(nuevo_estado, idx_jugador, -1, profundidad + 1)
 
     return nuevo_estado
 
