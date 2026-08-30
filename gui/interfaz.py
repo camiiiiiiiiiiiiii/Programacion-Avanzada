@@ -1,0 +1,1162 @@
+import sys
+import pygame
+import logic.logica as juego
+from logic.datos_tablero import CAMINO, CELDAS_ESPECIALES, PUNTUACION_PARA_GANAR
+import random
+import time
+import math 
+
+class JuegoGUI:
+    def __init__(self):
+        pygame.init()
+        self.ventana = pygame.display.set_mode((1500, 900))
+        pygame.display.set_caption("Entregable 1 - Programacion Funcional")
+        self.reloj = pygame.time.Clock()
+
+        # Colores
+        self.colores = {
+            'fondo': (25, 27, 36),
+            'texto': (235, 237, 240),
+            'texto_oscuro': (45, 48, 55),
+            'dorado': (220, 180, 80),
+            'borde': (190, 184, 192),
+            'auto': (205, 220, 215),
+            'interactivo': (205, 215, 235),
+            'boton': (70, 75, 90),
+            'boton_hover': (90, 98, 115),
+            'boton_menos': (120, 128, 145),
+            'boton_mas': (120, 128, 145),
+            'casilla': (235, 237, 240),
+            'inicio': (170, 210, 190),
+            'fin': (220, 180, 190),
+            'P1': (245, 215, 175),
+            'P2': (245, 215, 175),
+            'P3': (245, 215, 175),
+            'C1': (235, 190, 235),
+            'C2': (235, 190, 235),
+            'dado': (245, 240, 225),
+            'popup_fondo': (30, 30, 40, 200),
+            'popup_borde': (200, 180, 100),
+            'dashboard_fondo': (40, 45, 60),
+            'dashboard_borde': (100, 110, 130),
+            'cuadrante_fondo': (60, 65, 80),
+            'cuadrante_turno': (255, 215, 0),
+            'confeti': [(255, 215, 0), (255, 100, 100), (100, 255, 100), (100, 100, 255), (255, 100, 255), (100, 255, 255)],
+        }
+        # Colores para fichas de jugadores
+        self.colores_jugadores = [(255, 100, 100), (100, 255, 100), (100, 100, 255), (255, 255, 100)]
+
+        self.fuente_pequena = pygame.font.SysFont("Arial", 18)
+        self.fuente_mediana = pygame.font.SysFont("Arial", 24)
+        self.fuente_grande = pygame.font.SysFont("Arial", 48)
+        self.fuente_titulo = pygame.font.SysFont("Arial", 64, bold=True)
+        self.fuente_reglas = pygame.font.SysFont("Arial", 22)
+
+        # Botones de inicio
+        self.boton_automatico = pygame.Rect(400, 350, 250, 60)
+        self.boton_interactivo = pygame.Rect(900, 350, 250, 60)
+        self.boton_auto_hover = False
+        self.boton_interactivo_hover = False
+
+        self.pantalla_actual = "inicio"
+        self.modo_juego = None
+        self.mensaje = "¡Bienvenidos al Juego!"
+        self.cantidad_jugadores = 2
+        self.nombres_jugadores = [""] * 4  # Para almacenar los nombres
+        self.campo_activo = 0
+        self.mostrar_cursor = True
+        self.tiempo_cursor = 0
+        self.boton_empezar = None
+        self.boton_volver_nombres = None
+        self.boton_mas = None
+        self.boton_menos = None
+        self.boton_continuar = None
+        self.boton_continuar_hover = False
+
+        # Variables del juego
+        self.estado = None
+        self.jugadores = []
+        self.juego_terminado = False
+        self.animando = False
+        self.tiempo_ultimo_auto = 0
+        self.en_competencia = False
+        self.jugadores_empate = None
+        self.tiempo_proxima_accion = 0
+
+        self.boton_hover = False
+
+        self.dashboard_x = 20
+        self.dashboard_y = 50
+        self.dashboard_ancho = 300
+        self.dashboard_alto = 640   # igual al alto del tablero
+
+        # Posiciones relativas dentro del dashboard
+        self.margen_superior = 20
+        self.margen_lateral = 15
+        self.separacion = 10
+
+        # Mensaje
+        self.mensaje_x = self.dashboard_x + self.margen_lateral
+        self.mensaje_y = self.dashboard_y + self.margen_superior
+        self.mensaje_ancho = self.dashboard_ancho - 2*self.margen_lateral
+
+        # Dado
+        self.dado_tam = 80
+        self.dado_x = self.dashboard_x + (self.dashboard_ancho - self.dado_tam) // 2
+        self.dado_y = self.mensaje_y + 100  # después del mensaje (dejamos espacio)
+
+        # Jugadores
+        self.jugadores_x = self.dashboard_x + self.margen_lateral
+        self.jugadores_y = self.dado_y + self.dado_tam + 20
+        self.jugador_cuadrante_w = 130
+        self.jugador_cuadrante_h = 80
+
+        # Botón tirar dado se calculará en dibujar_dashboard
+        self.boton_tirar = None
+
+        self.tablero_x = 500
+        self.tablero_y = 80
+        self.casilla = 65
+
+        # Botón para cerrar el pop-up de reglas
+        self.boton_continuar_reglas = pygame.Rect(1500//2 - 100, 780, 200, 50)
+        self.boton_continuar_reglas_hover = False
+
+        #FIN
+        self.boton_volver_jugar = None
+        self.boton_volver_menu = None
+        self.boton_volver_jugar_hover = False
+        self.boton_volver_menu_hover = False
+        self.tiempo_animacion = 0
+        self.estrellas = []
+        self.generar_estrellas()
+
+        # ----- COMPETENCIA -----
+        self.mostrando_competencia = False
+        self.competencia_jugadores = None      # (idx1, idx2)
+        self.competencia_dados = None          # (dado1, dado2) o None
+        self.competencia_ganador = None        # idx del ganador o None
+        self.competencia_resuelta = False
+        self.boton_tirar_competencia = pygame.Rect(0, 0, 200, 50)
+        self.boton_aceptar_competencia = pygame.Rect(0, 0, 200, 50)
+
+        # ----- SELECCIÓN DE CASTIGO (P1) -----
+        self.seleccionando_castigo = False
+        self.jugador_castigador = None  # idx del jugador que está en P1
+        self.botones_castigo = []       # lista de rects para cada opción
+
+    def ejecutar(self):
+        while True:
+            self.procesar_eventos()
+            self.actualizar()
+            self.dibujar()
+            self.reloj.tick(60)
+
+    # ---------- EVENTOS ----------
+    def procesar_eventos(self):
+        for evento in pygame.event.get():
+            if evento.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if evento.type == pygame.KEYDOWN or evento.type == pygame.MOUSEBUTTONDOWN:
+                self.mostrar_cursor = True
+                self.tiempo_cursor = pygame.time.get_ticks()
+
+            if self.pantalla_actual == "inicio":
+                self._procesar_eventos_inicio(evento)
+            elif self.pantalla_actual == "cantidad_jugadores":
+                self.procesar_cantidad_jugadores(evento)
+            elif self.pantalla_actual == "nombres":
+                self.procesar_eventos_nombres(evento)
+            elif self.pantalla_actual == "reglas":
+                self.procesar_eventos_reglas(evento)
+            elif self.pantalla_actual == "juego":
+                self.procesar_eventos_juego(evento)
+
+    def _procesar_eventos_inicio(self, evento):
+        if evento.type == pygame.MOUSEBUTTONDOWN:
+            if self.boton_automatico.collidepoint(evento.pos):
+                self.modo_juego = "automatico"
+                self.pantalla_actual = "cantidad_jugadores"
+            elif self.boton_interactivo.collidepoint(evento.pos):
+                self.modo_juego = "interactivo"
+                self.pantalla_actual = "cantidad_jugadores"
+        elif evento.type == pygame.MOUSEMOTION:
+            self.boton_auto_hover = self.boton_automatico.collidepoint(evento.pos)
+            self.boton_interactivo_hover = self.boton_interactivo.collidepoint(evento.pos)
+
+    def procesar_cantidad_jugadores(self, evento):
+        if evento.type == pygame.MOUSEBUTTONDOWN:
+            if self.boton_menos.collidepoint(evento.pos):
+                if self.cantidad_jugadores > 2:
+                    self.cantidad_jugadores -= 1
+            elif self.boton_mas.collidepoint(evento.pos):
+                if self.cantidad_jugadores < 4:
+                    self.cantidad_jugadores += 1
+            elif self.boton_continuar.collidepoint(evento.pos):
+                if self.modo_juego == "interactivo":
+                    self.nombres_jugadores = [""] * 4  # Resetear nombres
+                    self.campo_activo = 0
+                    self.pantalla_actual = "nombres" 
+                else:
+                    self.jugadores = [f"Jugador {i+1}" for i in range(self.cantidad_jugadores)]
+                    self.estado = juego.estado_inicial(self.cantidad_jugadores)
+                    self.pantalla_actual = "reglas"
+                    self.mensaje = "Reglas del juego"
+        elif evento.type == pygame.MOUSEMOTION:
+            if self.boton_continuar:
+                self.boton_continuar_hover = self.boton_continuar.collidepoint(evento.pos)
+
+    def procesar_eventos_reglas(self, evento):
+        if evento.type == pygame.KEYDOWN:
+            if evento.key == pygame.K_SPACE:
+                self.cerrar_reglas()
+        elif evento.type == pygame.MOUSEBUTTONDOWN:
+            if self.boton_continuar_reglas.collidepoint(evento.pos):
+                self.cerrar_reglas()
+        elif evento.type == pygame.MOUSEMOTION:
+            self.boton_continuar_reglas_hover = self.boton_continuar_reglas.collidepoint(evento.pos)
+
+    def cerrar_reglas(self):
+        self.pantalla_actual = "juego"
+        self.mensaje = f"¡Comienza el juego! Turno de {self.jugadores[0]}"
+
+    def procesar_eventos_juego(self, evento):
+        if self.juego_terminado:
+            if evento.type == pygame.MOUSEMOTION:
+                if self.boton_volver_jugar:
+                    self.boton_volver_jugar_hover = self.boton_volver_jugar.collidepoint(evento.pos)
+                if self.boton_volver_menu:
+                    self.boton_volver_menu_hover = self.boton_volver_menu.collidepoint(evento.pos)
+            elif evento.type == pygame.MOUSEBUTTONDOWN:
+                if self.boton_volver_jugar and self.boton_volver_jugar.collidepoint(evento.pos):
+                    self.reiniciar_juego()
+                    return
+                if self.boton_volver_menu and self.boton_volver_menu.collidepoint(evento.pos):
+                    self.volver_menu()
+                    return
+            return 
+        if self.mostrando_competencia:
+            if evento.type == pygame.MOUSEBUTTONDOWN:
+                if not self.competencia_resuelta:
+                    if self.boton_tirar_competencia.collidepoint(evento.pos):
+                        self.resolver_competencia_popup()
+                else:
+                    if self.boton_aceptar_competencia.collidepoint(evento.pos):
+                        self.cerrar_competencia_popup()
+            if evento.type == pygame.KEYDOWN:
+                if evento.key == pygame.K_SPACE:
+                    if not self.competencia_resuelta:
+                        self.resolver_competencia_popup()
+                    else:
+                        self.cerrar_competencia_popup()
+            return  # No procesar otros eventos
+
+        if self.seleccionando_castigo:
+            if evento.type == pygame.MOUSEBUTTONDOWN:
+                for rect, idx in self.botones_castigo:
+                    if rect.collidepoint(evento.pos):
+                        self.aplicar_castigo(idx)
+                        return
+            elif evento.type == pygame.KEYDOWN:
+                # Teclas numéricas 1-4 para seleccionar
+                if evento.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]:
+                    num = evento.key - pygame.K_1  # 0-indexado
+                    # Buscar el jugador con ese número (idx+1)
+                    for idx in self.opciones_castigo:
+                        if idx == num:
+                            self.aplicar_castigo(idx)
+                            return
+            return  # No procesar otros eventos durante selección
+
+        if evento.type == pygame.KEYDOWN and evento.key == pygame.K_SPACE:
+            if self.modo_juego == "interactivo" and not self.juego_terminado:
+                self.tirar_dado()
+                return
+
+        if self.modo_juego == "interactivo":
+            if evento.type == pygame.MOUSEBUTTONDOWN:
+                if self.boton_tirar and self.boton_tirar.collidepoint(evento.pos) and not self.juego_terminado:
+                    self.tirar_dado()
+            elif evento.type == pygame.MOUSEMOTION:
+                if self.boton_tirar:
+                    self.boton_hover = self.boton_tirar.collidepoint(evento.pos)
+
+    
+    def procesar_eventos_nombres(self, evento):
+        if evento.type == pygame.KEYDOWN:
+            if evento.key == pygame.K_RETURN:
+                if self.campo_activo < self.cantidad_jugadores - 1:
+                    if self.nombres_jugadores[self.campo_activo]:
+                        self.campo_activo += 1
+                else:
+                    if all(self.nombres_jugadores[:self.cantidad_jugadores]):
+                        self.iniciar_juego_con_nombres()
+            elif evento.key == pygame.K_BACKSPACE:
+                if self.nombres_jugadores[self.campo_activo]:
+                    self.nombres_jugadores[self.campo_activo] = self.nombres_jugadores[self.campo_activo][:-1]
+            elif evento.key == pygame.K_TAB:
+                self.campo_activo = (self.campo_activo + 1) % self.cantidad_jugadores
+            elif evento.unicode and evento.unicode.isprintable():
+                if len(self.nombres_jugadores[self.campo_activo]) < 15:
+                    self.nombres_jugadores[self.campo_activo] += evento.unicode
+        
+        elif evento.type == pygame.MOUSEBUTTONDOWN:
+            if hasattr(self, 'boton_empezar') and self.boton_empezar.collidepoint(evento.pos):
+                if all(self.nombres_jugadores[:self.cantidad_jugadores]):
+                    self.iniciar_juego_con_nombres()
+            elif hasattr(self, 'boton_volver_nombres') and self.boton_volver_nombres.collidepoint(evento.pos):
+                self.pantalla_actual = "cantidad_jugadores"
+                self.nombres_jugadores = [""] * 4
+                self.campo_activo = 0
+
+
+    def iniciar_juego_con_nombres(self):
+        """Inicia el juego con los nombres ingresados"""
+        # Guardar los nombres
+        self.jugadores = self.nombres_jugadores[:self.cantidad_jugadores]
+        
+        # Inicializar el estado del juego
+        self.estado = juego.estado_inicial(self.cantidad_jugadores)
+        
+        # Ir a reglas o directamente al juego
+        self.pantalla_actual = "reglas"
+        self.mensaje = "Reglas del juego"
+        
+        # Resetear nombres para la próxima vez
+        self.nombres_jugadores = [""] * 4
+        self.campo_activo = 0
+    # ---------- ACTUALIZAR ----------
+    def actualizar(self):
+        ahora = pygame.time.get_ticks()
+        if ahora - self.tiempo_cursor > 500:
+            self.mostrar_cursor = not self.mostrar_cursor
+            self.tiempo_cursor = ahora
+        if self.pantalla_actual == "juego":
+            ahora = pygame.time.get_ticks()
+
+            # --- Lógica automática de tiro de dado ---
+            if self.modo_juego == "automatico" and not self.juego_terminado:
+                if not self.mostrando_competencia and not self.seleccionando_castigo:
+                    if ahora - self.tiempo_ultimo_auto > 1000:
+                        self.tirar_dado()
+                        self.tiempo_ultimo_auto = ahora
+
+            # --- Lógica automática de competencia (SOLO EN MODO AUTOMÁTICO) ---
+            if self.modo_juego == "automatico" and self.mostrando_competencia:
+                if not self.competencia_resuelta:
+                    if ahora > self.tiempo_proxima_accion:
+                        self.resolver_competencia_popup()
+                else:
+                    if ahora > self.tiempo_proxima_accion:
+                        self.cerrar_competencia_popup()
+
+    # ---------- TIRAR DADO ----------
+    def tirar_dado(self):
+        if self.juego_terminado:
+            return
+
+        estado = self.estado
+        idx = estado['actual']
+        dado = random.randint(1, 6)
+
+        # Composición: mover y aplicar efecto (excepto P1 interactivo)
+        estado_movido = juego.mover_jugador(estado, idx, dado)
+        pos = estado_movido['posiciones'][idx]
+        if pos in CELDAS_ESPECIALES and CELDAS_ESPECIALES[pos] == 'P1' and self.modo_juego == "interactivo":
+            self.estado = estado_movido
+            self.estado['valor_del_dado'] = dado
+            self.mensaje = f"{self.jugadores[idx]} sacó {dado}"
+            self.iniciar_seleccion_castigo(idx)
+            return
+        else:
+            self.estado = juego.mover_y_aplicar_efecto(estado, idx, dado)
+            self.estado['valor_del_dado'] = dado
+            # Determinar si hubo efecto especial
+            pos = self.estado['posiciones'][idx]
+            if pos in CELDAS_ESPECIALES:
+                mensaje_estado = self.estado.get('mensaje')
+                if mensaje_estado:
+                    self.mensaje = mensaje_estado
+                else:
+                    self.mensaje = f"Jugador {idx+1} sacó {dado}"
+            else:
+                self.mensaje = f"Jugador {idx+1} sacó {dado}"
+
+        # Verificar competencia
+        if juego.checkear_si_hay_competencia(self.estado, idx):
+            self.iniciar_competencia(idx)
+            return
+
+        # Verificar si ganó
+        if self.estado['posiciones'][idx] >= PUNTUACION_PARA_GANAR:
+            self.juego_terminado = True
+            self.mensaje = f"¡Jugador {idx+1} ha ganado!"
+            self.estado['ganador'] = idx
+            self.fin_juego()
+            self.generar_estrellas()
+            return
+
+        self.avanzar_turno()
+
+    def iniciar_competencia(self, idx_jugador):
+        estado = self.estado
+        posicion = estado['posiciones'][idx_jugador]
+        otro = None
+
+        for i, p in enumerate(estado['posiciones']):
+            if i != idx_jugador and p == posicion:
+                otro = i
+                break
+        if otro is None:
+            return
+
+        self.mostrando_competencia = True
+        self.competencia_jugadores = (idx_jugador, otro)
+        self.competencia_dados = None
+        self.competencia_ganador = None
+        self.competencia_resuelta = False
+        self.mensaje = f"¡Competencia! {self.jugadores[idx_jugador]} vs {self.jugadores[otro]}"
+
+        # --- Definir rectángulos del pop‑up y botones ---
+        popup_ancho = 700
+        popup_alto = 400
+        self.popup_competencia_rect = pygame.Rect(
+            1500//2 - popup_ancho//2,
+            900//2 - popup_alto//2,
+            popup_ancho,
+            popup_alto
+        )
+        self.boton_tirar_competencia = pygame.Rect(
+            self.popup_competencia_rect.centerx - 100,
+            self.popup_competencia_rect.bottom - 70,
+            200, 50
+        )
+        self.boton_aceptar_competencia = pygame.Rect(
+            self.popup_competencia_rect.centerx - 100,
+            self.popup_competencia_rect.bottom - 70,
+            200, 50
+        )
+
+        if self.modo_juego == "automatico":
+            self.tiempo_proxima_accion = pygame.time.get_ticks() + 1500
+
+    def avanzar_turno(self):
+        estado = self.estado
+        total = len(estado['posiciones'])
+        actual = estado['actual']
+
+        # 1. Resetear flag del jugador actual si pierde el turno (por si acaso)
+        if estado['pierde_turno'][actual]:
+            nuevo_pierde = list(estado['pierde_turno'])
+            nuevo_pierde[actual] = False
+            estado = dict(estado, pierde_turno=tuple(nuevo_pierde))
+
+        # 2. Buscar el siguiente jugador que pueda jugar (desde el siguiente del actual)
+        siguiente = (actual + 1) % total
+        for _ in range(total):
+            if estado['pierde_turno'][siguiente]:
+                # Resetear flag del jugador que se salta
+                nuevo_pierde = list(estado['pierde_turno'])
+                nuevo_pierde[siguiente] = False
+                estado = dict(estado, pierde_turno=tuple(nuevo_pierde))
+            else:
+                # Este jugador puede jugar
+                self.estado = dict(estado, actual=siguiente)
+                self.mensaje = f"Turno de {self.jugadores[siguiente]}"
+                return
+            siguiente = (siguiente + 1) % total
+
+        # Si todos pierden el turno (caso extremo), no hacemos nada
+        self.mensaje = "Todos pierden el turno, reiniciando..."
+        self.estado = dict(estado, actual=actual)
+
+    # Pop-up resolver competencia:
+    def resolver_competencia_popup(self):
+        idx1, idx2 = self.competencia_jugadores
+        dado1 = random.randint(1, 6)
+        dado2 = random.randint(1, 6)
+        self.competencia_dados = (dado1, dado2)
+
+        nuevo_estado = juego.resolver_competencia(self.estado, idx1, idx2, dado1, dado2)
+        self.estado = nuevo_estado
+
+        if self.estado.get('competencia_empate', False):
+            # Empate
+            self.competencia_resuelta = False
+            self.competencia_ganador = None
+            self.mensaje = "¡Empate! Vuelvan a tirar."
+            del self.estado['competencia_empate']
+            if self.modo_juego == "automatico":
+                self.tiempo_proxima_accion = pygame.time.get_ticks() + 1500
+        else:
+            # Ganador
+            self.competencia_resuelta = True
+            self.competencia_ganador = idx1 if dado1 > dado2 else idx2
+            self.mensaje = nuevo_estado.get('mensaje', "Competencia resuelta")
+            if self.modo_juego == "automatico":
+                self.tiempo_proxima_accion = pygame.time.get_ticks() + 2000
+
+    def cerrar_competencia_popup(self):
+        self.mostrando_competencia = False
+        if self.competencia_ganador is not None:
+            # Avanzar turno y actualizar mensaje
+            self.avanzar_turno()
+        # Limpiar variables
+        self.competencia_jugadores = None
+        self.competencia_dados = None
+        self.competencia_ganador = None
+        self.competencia_resuelta = False
+
+    def iniciar_seleccion_castigo(self, idx_jugador):
+        """Inicia el pop-up para elegir a quién castigar."""
+        self.seleccionando_castigo = True
+        self.jugador_castigador = idx_jugador
+        # Obtener índices de los otros jugadores
+        otros = [i for i in range(len(self.estado['posiciones'])) if i != idx_jugador]
+        self.opciones_castigo = otros
+        # Crear rects para los botones en el pop-up
+        self.botones_castigo = []
+        # El pop-up estará centrado, con un botón por jugador
+        # Posicionaremos los botones en una columna o fila según cantidad
+        # Para simplificar, usaremos una columna vertical
+        popup_ancho = 500
+        popup_alto = 100 + len(otros) * 70
+        popup_x = 1500//2 - popup_ancho//2
+        popup_y = 900//2 - popup_alto//2
+        self.popup_castigo_rect = pygame.Rect(popup_x, popup_y, popup_ancho, popup_alto)
+        for i, idx in enumerate(otros):
+            btn_rect = pygame.Rect(popup_x + 50, popup_y + 80 + i*70, popup_ancho - 100, 50)
+            self.botones_castigo.append((btn_rect, idx))
+
+    def aplicar_castigo(self, idx_castigado):
+        """Aplica el castigo al jugador seleccionado."""
+        idx_jugador = self.jugador_castigador
+        self.estado = juego.aplicar_efecto_celda_especial(self.estado, idx_jugador, idx_castigado=idx_castigado)
+        mensaje_estado = self.estado.get('mensaje')
+        if mensaje_estado:
+            self.mensaje = mensaje_estado
+        self.seleccionando_castigo = False
+        # Verificar si el jugador actual ganó (aunque no se movió, por si acaso)
+        if self.estado['posiciones'][idx_jugador] >= PUNTUACION_PARA_GANAR:
+            self.juego_terminado = True
+            self.mensaje = f"¡Jugador {idx_jugador+1} ha ganado!"
+            self.estado['ganador'] = idx_jugador
+            return
+        self.avanzar_turno()
+
+    def dibujar_popup_castigo(self):
+        """Dibuja el pop-up de selección de castigo."""
+        if not self.seleccionando_castigo:
+            return
+        # Fondo semitransparente
+        s = pygame.Surface((1500, 900), pygame.SRCALPHA)
+        s.fill((0, 0, 0, 180))
+        self.ventana.blit(s, (0, 0))
+
+        # Rectángulo del pop-up
+        pygame.draw.rect(self.ventana, (50, 55, 70), self.popup_castigo_rect, border_radius=20)
+        pygame.draw.rect(self.ventana, (200, 180, 100), self.popup_castigo_rect, 4, border_radius=20)
+
+        # Título
+        titulo = self.fuente_grande.render("¡Elige a quién castigar!", True, (255, 215, 0))
+        self.ventana.blit(titulo, (self.popup_castigo_rect.x + self.popup_castigo_rect.w//2 - titulo.get_width()//2,
+                                   self.popup_castigo_rect.y + 20))
+
+        # Botones para cada jugador
+        for rect, idx in self.botones_castigo:
+            # Color de fondo según el jugador
+            color = self.colores_jugadores[idx % len(self.colores_jugadores)]
+            # Hacerlo más claro para el botón
+            color_btn = tuple(min(255, c + 60) for c in color)
+            pygame.draw.rect(self.ventana, color_btn, rect, border_radius=10)
+            pygame.draw.rect(self.ventana, (80, 85, 100), rect, 2, border_radius=10)
+            # Nombre del jugador
+            nombre = self.jugadores[idx]
+            texto = self.fuente_mediana.render(nombre, True, (235, 237, 240))
+            self.ventana.blit(texto, (rect.x + 10, rect.y + 10))
+            # Número (para selección por teclado)
+            num_texto = self.fuente_pequena.render(f"[{idx+1}]", True, (200, 200, 210))
+            self.ventana.blit(num_texto, (rect.x + rect.w - 40, rect.y + 10))
+
+    # ---------- DIBUJO ----------
+    def dibujar(self):
+        self.ventana.fill(self.colores['fondo'])
+        if self.pantalla_actual == "inicio":
+            self.pantalla_inicio()
+        elif self.pantalla_actual == "cantidad_jugadores":
+            self.pantalla_cantidad_jugadores()
+        elif self.pantalla_actual == "nombres":
+            self.dibujar_pedir_nombres()
+        elif self.pantalla_actual == "reglas":
+            self.pantalla_reglas()
+        elif self.pantalla_actual == "juego":
+            self.pantalla_juego()
+        pygame.display.flip()
+
+    # ---------- PANTALLAS ----------
+    def pantalla_inicio(self):
+        self.ventana.fill(self.colores['fondo'])
+        titulo = self.fuente_grande.render("¡Bienvenidos!", True, (255, 215, 0))
+        titulo_rect = titulo.get_rect(center=(1500//2, 150))
+        self.ventana.blit(titulo, titulo_rect)
+
+        subtitulo = self.fuente_mediana.render("Juego de Tablero", True, (220, 220, 240))
+        subtitulo_rect = subtitulo.get_rect(center=(1500//2, 210))
+        self.ventana.blit(subtitulo, subtitulo_rect)
+
+        color_auto = self.colores['auto'] if not self.boton_auto_hover else self.colores['boton_hover']
+        pygame.draw.rect(self.ventana, color_auto, self.boton_automatico, border_radius=15)
+        texto = self.fuente_mediana.render("Juego Automático", True, self.colores['texto_oscuro'])
+        texto_rect = texto.get_rect(center=self.boton_automatico.center)
+        self.ventana.blit(texto, texto_rect)
+
+        color_inter = self.colores['interactivo'] if not self.boton_interactivo_hover else self.colores['boton_hover']
+        pygame.draw.rect(self.ventana, color_inter, self.boton_interactivo, border_radius=15)
+        texto = self.fuente_mediana.render("Juego Interactivo", True, self.colores['texto_oscuro'])
+        texto_rect = texto.get_rect(center=self.boton_interactivo.center)
+        self.ventana.blit(texto, texto_rect)
+
+        pie = self.fuente_pequena.render("Programación Avanzada - 2026", True, (180, 180, 200))
+        pie_rect = pie.get_rect(center=(1500//2, 750))
+        self.ventana.blit(pie, pie_rect)
+
+    def pantalla_cantidad_jugadores(self):
+        self.ventana.fill(self.colores['fondo'])
+        titulo = self.fuente_grande.render("Selecciona la cantidad de jugadores", True, (255, 215, 0))
+        titulo_rect = titulo.get_rect(center=(1500//2, 150))
+        self.ventana.blit(titulo, titulo_rect)
+
+        selector_y = 300
+        ancho_total = 60 + 30 + 60 + 30 + 60
+        x_inicio = 1500//2 - ancho_total//2
+
+        x_menos = x_inicio
+        self.boton_menos = pygame.Rect(x_menos, selector_y, 60, 60)
+        pygame.draw.rect(self.ventana, self.colores['boton_menos'], self.boton_menos, border_radius=10)
+        texto_menos = self.fuente_grande.render("-", True, (235, 237, 240))
+        rect_menos = texto_menos.get_rect(center=self.boton_menos.center)
+        self.ventana.blit(texto_menos, rect_menos)
+
+        x_numero = x_menos + 60 + 30
+        texto_cant = self.fuente_titulo.render(str(self.cantidad_jugadores), True, self.colores['dorado'])
+        rect_cant = texto_cant.get_rect(center=(x_numero + 30, selector_y + 30))
+        self.ventana.blit(texto_cant, rect_cant)
+
+        x_mas = x_numero + 60 + 30
+        self.boton_mas = pygame.Rect(x_mas, selector_y, 60, 60)
+        pygame.draw.rect(self.ventana, self.colores['boton_mas'], self.boton_mas, border_radius=10)
+        texto_mas = self.fuente_grande.render("+", True, (235, 237, 240))
+        rect_mas = texto_mas.get_rect(center=self.boton_mas.center)
+        self.ventana.blit(texto_mas, rect_mas)
+
+        rango = self.fuente_pequena.render("(2 a 4 jugadores)", True, (180, 180, 200))
+        rango_rect = rango.get_rect(center=(1500//2, 460))
+        self.ventana.blit(rango, rango_rect)
+
+        self.boton_continuar = pygame.Rect(1500//2 - 150, 500, 300, 60)
+        color_cont = (100, 200, 100) if not self.boton_continuar_hover else (130, 230, 130)
+        pygame.draw.rect(self.ventana, color_cont, self.boton_continuar, border_radius=15)
+        texto_cont = self.fuente_mediana.render("Continuar", True, (235, 237, 240))
+        rect_cont = texto_cont.get_rect(center=self.boton_continuar.center)
+        self.ventana.blit(texto_cont, rect_cont)
+
+        pie = self.fuente_pequena.render("Programación Avanzada - 2026", True, (180, 180, 200))
+        pie_rect = pie.get_rect(center=(1500//2, 750))
+        self.ventana.blit(pie, pie_rect)
+
+    def pantalla_reglas(self):
+        self.dibujar_tablero()
+        self.dibujar_dashboard()
+
+        # Pop-up semitransparente
+        s = pygame.Surface((1500, 900), pygame.SRCALPHA)
+        s.fill((0, 0, 0, 180))
+        self.ventana.blit(s, (0, 0))
+
+        popup_rect = pygame.Rect(150, 100, 1200, 700)
+        pygame.draw.rect(self.ventana, (50, 55, 70), popup_rect, border_radius=20)
+        pygame.draw.rect(self.ventana, (200, 180, 100), popup_rect, 4, border_radius=20)
+
+        titulo = self.fuente_grande.render("Reglas del Juego", True, (255, 215, 0))
+        self.ventana.blit(titulo, (1500//2 - titulo.get_width()//2, 130))
+
+        reglas_texto = [
+            "• Los jugadores comienzan en la casilla INICIO y avanzan tirando un dado (1-6).",
+            "• El juego termina cuando un jugador alcanza la casilla FIN.",
+            "• Si caes en una casilla especial (P1, P2, P3, C1, C2), se aplica su efecto.",
+            "• Si dos jugadores caen en la misma casilla, compiten por ella:",
+            "  - El que saque mayor dado se queda, el otro retrocede 2 casilleros.",
+            "  - Si al retroceder cae en otra casilla ocupada, retrocede 1 más.",
+            "• No hay rebote: si te faltan menos casillas que el dado, llegas a FIN.",
+            "",
+            "Casillas especiales:",
+            "  P1: El jugador elige a otro para que pierda su próximo turno.",
+            "  P2: Tira el dado nuevamente y avanza lo que salga.",
+            "  P3: Avanza 2 casillas.",
+            "  C1: Pierde su próximo turno.",
+            "  C2: Retrocede 3 casillas."
+        ]
+
+        y_texto = 200
+        for linea in reglas_texto:
+            if linea.startswith("  "):
+                texto = self.fuente_reglas.render(linea, True, (200, 200, 210))
+                self.ventana.blit(texto, (200, y_texto))
+            else:
+                texto = self.fuente_reglas.render(linea, True, (235, 237, 240))
+                self.ventana.blit(texto, (180, y_texto))
+            y_texto += 30
+
+        msg_final = self.fuente_grande.render("Apretar ESPACIO para continuar", True, (255, 255, 200))
+        msg_rect = msg_final.get_rect(center=(1500//2, 720))
+        self.ventana.blit(msg_final, msg_rect)
+
+        color_btn = (100, 200, 100) if not self.boton_continuar_reglas_hover else (130, 230, 130)
+        pygame.draw.rect(self.ventana, color_btn, self.boton_continuar_reglas, border_radius=15)
+        texto_btn = self.fuente_mediana.render("Continuar", True, (235, 237, 240))
+        rect_btn = texto_btn.get_rect(center=self.boton_continuar_reglas.center)
+        self.ventana.blit(texto_btn, rect_btn)
+
+    def pantalla_juego(self):
+        self.dibujar_tablero()
+        self.dibujar_dashboard()
+
+        if self.juego_terminado:
+            self.dibujar_fin_juego()
+
+        if self.mostrando_competencia:
+            self.dibujar_popup_competencia()
+
+        if self.seleccionando_castigo:
+            self.dibujar_popup_castigo()
+
+    # ---------- DIBUJAR TABLERO ----------
+    def dibujar_tablero(self):
+        tablero_rect = pygame.Rect(self.tablero_x - 10, self.tablero_y - 10,
+                                   10 * (self.casilla + 2) + 20,
+                                   10 * (self.casilla + 2) + 20)
+        interior_rect = pygame.Rect(self.tablero_x, self.tablero_y,
+                                    10 * (self.casilla + 2) - 2,
+                                    10 * (self.casilla + 2) - 2)
+        pygame.draw.rect(self.ventana, (180, 170, 160), interior_rect)
+        pygame.draw.rect(self.ventana, (200, 180, 100), tablero_rect, 4, border_radius=10)
+
+        for i, (fila, col) in enumerate(CAMINO):
+            x = self.tablero_x + col * (self.casilla + 2)
+            y = self.tablero_y + fila * (self.casilla + 2)
+            rect = (x, y, self.casilla, self.casilla)
+
+            color = self.colores.get('casilla', (235, 237, 240))
+            if i in CELDAS_ESPECIALES:
+                tipo = CELDAS_ESPECIALES[i]
+                if tipo in self.colores:
+                    color = self.colores[tipo]
+            elif i == 0:
+                color = self.colores.get('inicio', (170, 210, 190))
+            elif i == len(CAMINO) - 1:
+                color = self.colores.get('fin', (220, 180, 190))
+
+            pygame.draw.rect(self.ventana, color, rect)
+            pygame.draw.rect(self.ventana, self.colores.get('borde', (190, 184, 192)), rect, 2)
+
+            if i in CELDAS_ESPECIALES:
+                tipo = CELDAS_ESPECIALES[i]
+                texto_casilla = self.fuente_pequena.render(tipo, True, (50, 50, 50))
+                self.ventana.blit(texto_casilla, (x + 5, y + 5))
+            elif i == 0:
+                texto_casilla = self.fuente_pequena.render("INICIO", True, (50, 50, 50))
+                self.ventana.blit(texto_casilla, (x + 5, y + 5))
+            elif i == len(CAMINO) - 1:
+                texto_casilla = self.fuente_pequena.render("FIN", True, (50, 50, 50))
+                self.ventana.blit(texto_casilla, (x + 5, y + 5))
+
+        # Fichas de jugadores
+        if self.estado:
+            posiciones = self.estado['posiciones']
+            for idx, pos in enumerate(posiciones):
+                if pos >= len(CAMINO):
+                    continue
+                fila, col = CAMINO[pos]
+                cx = self.tablero_x + col * (self.casilla + 2) + self.casilla // 2
+                cy = self.tablero_y + fila * (self.casilla + 2) + self.casilla // 2
+                offset_x = (idx % 2) * 15 - 7
+                offset_y = (idx // 2) * 15 - 7
+                pygame.draw.circle(self.ventana, self.colores_jugadores[idx % len(self.colores_jugadores)],
+                                   (cx + offset_x, cy + offset_y), 12)
+                num = self.fuente_pequena.render(str(idx+1), True, (255, 255, 255))
+                self.ventana.blit(num, (cx + offset_x - 6, cy + offset_y - 8))
+
+    # --------- DIBUJAR DASHBOARD ----------
+    def dibujar_dashboard(self):
+        # Fondo del dashboard
+        panel_rect = pygame.Rect(self.dashboard_x, self.dashboard_y,
+                                 self.dashboard_ancho, self.dashboard_alto)
+        pygame.draw.rect(self.ventana, self.colores['dashboard_fondo'], panel_rect, border_radius=15)
+        pygame.draw.rect(self.ventana, self.colores['dashboard_borde'], panel_rect, 3, border_radius=15)
+
+        # 1. Mensaje play-by-play (arriba)
+        if self.mensaje:
+            lineas = self._dividir_texto(self.mensaje, self.fuente_mediana, self.mensaje_ancho)
+            # Mostrar máximo 3 líneas
+            for i, linea in enumerate(lineas[:3]):
+                texto = self.fuente_mediana.render(linea, True, (235, 237, 240))
+                self.ventana.blit(texto, (self.mensaje_x, self.mensaje_y + i*30))
+        else:
+            texto = self.fuente_mediana.render("Esperando...", True, (200, 200, 210))
+            self.ventana.blit(texto, (self.mensaje_x, self.mensaje_y))
+
+        # 2. Dado (centrado horizontalmente)self._dibujar_dado(self.dado_x, self.dado_y, self.dado_tam)
+        if self.estado and self.estado.get('valor_del_dado') is not None:
+            self._dibujar_dado(self.dado_x, self.dado_y, self.dado_tam, self.estado['valor_del_dado'])
+        else:
+            self._dibujar_dado(self.dado_x, self.dado_y, self.dado_tam, 1)  # Mostrar 1 por defecto
+        # 3. Jugadores en cuadrícula 2x2
+        if self.estado:
+            num_jugadores = len(self.estado['posiciones'])
+            cols = 2
+            filas = (num_jugadores + 1) // 2
+            ancho_cuadrante = self.jugador_cuadrante_w
+            alto_cuadrante = self.jugador_cuadrante_h
+
+            # Calcular espacio disponible vertical para jugadores y botón
+            espacio_disponible = self.dashboard_y + self.dashboard_alto - self.jugadores_y - 10
+            # Si hay botón, reservar 60px
+            if self.modo_juego == "interactivo" and not self.juego_terminado:
+                espacio_para_boton = 60
+            else:
+                espacio_para_boton = 0
+            espacio_para_jugadores = espacio_disponible - espacio_para_boton
+
+            # Ajustar alto de cuadrante si es necesario (pero no menos de 60)
+            alto_cuadrante = min(alto_cuadrante, (espacio_para_jugadores - (filas-1)*self.separacion) // filas)
+            alto_cuadrante = max(alto_cuadrante, 60)
+
+            for i in range(num_jugadores):
+                fila = i // cols
+                col = i % cols
+                x = self.jugadores_x + col * (ancho_cuadrante + self.separacion)
+                y = self.jugadores_y + fila * (alto_cuadrante + self.separacion)
+                rect = pygame.Rect(x, y, ancho_cuadrante, alto_cuadrante)
+
+                # Fondo del cuadrante
+                color_fondo = self.colores['cuadrante_fondo']
+                pygame.draw.rect(self.ventana, color_fondo, rect, border_radius=8)
+
+                # Borde: si es el turno actual, borde amarillo grueso
+                if i == self.estado['actual']:
+                    pygame.draw.rect(self.ventana, self.colores['cuadrante_turno'], rect, 4, border_radius=8)
+                else:
+                    pygame.draw.rect(self.ventana, (80, 85, 100), rect, 2, border_radius=8)
+
+                # Nombre del jugador
+                nombre = self.jugadores[i] if i < len(self.jugadores) else f"Jugador {i+1}"
+                texto_nom = self.fuente_mediana.render(nombre, True, (235, 237, 240))
+                self.ventana.blit(texto_nom, (rect.x + 10, rect.y + 8))
+
+                # Casilla
+                pos = self.estado['posiciones'][i]
+                texto_pos = self.fuente_pequena.render(f"Casilla: {pos}", True, (200, 200, 210))
+                self.ventana.blit(texto_pos, (rect.x + 10, rect.y + 45))
+
+            # 4. Botón "Tirar Dado" (solo interactivo)
+            if self.modo_juego == "interactivo" and not self.juego_terminado:
+                boton_y = self.jugadores_y + filas * (alto_cuadrante + self.separacion) + 5
+                self.boton_tirar = pygame.Rect(self.dashboard_x + 40, boton_y, 220, 50)
+                color_btn = self.colores['boton'] if not self.boton_hover else self.colores['boton_hover']
+                pygame.draw.rect(self.ventana, color_btn, self.boton_tirar, border_radius=15)
+                texto_btn = self.fuente_mediana.render("Tirar Dado", True, (235, 237, 240))
+                texto_btn_rect = texto_btn.get_rect(center=self.boton_tirar.center)
+                self.ventana.blit(texto_btn, texto_btn_rect)
+        else:
+            texto = self.fuente_mediana.render("Sin jugadores", True, (200, 200, 210))
+            self.ventana.blit(texto, (self.jugadores_x, self.jugadores_y))
+
+    # ---------- DIBUJAR DADO (privado) ----------
+    def _dibujar_dado(self, x, y, tam, valor = None):
+        if valor is None:
+            dado_rect = pygame.Rect(x, y, tam, tam)
+            pygame.draw.rect(self.ventana, (200, 200, 200), dado_rect, border_radius=12)
+            pygame.draw.rect(self.ventana, (90, 98, 115), dado_rect, 3, border_radius=12)
+            texto = self.fuente_grande.render("?", True, (50, 50, 50))
+            self.ventana.blit(texto, (x + tam//2 - texto.get_width()//2, y + tam//2 - texto.get_height()//2))
+            return
+        #   valor = 1
+        #  if self.estado and self.estado.get('valor_del_dado') is not None:
+        #   valor = self.estado['valor_del_dado']
+
+        dado_rect = pygame.Rect(x, y, tam, tam)
+        pygame.draw.rect(self.ventana, (245, 240, 225), dado_rect, border_radius=12)
+        pygame.draw.rect(self.ventana, (90, 98, 115), dado_rect, 3, border_radius=12)
+
+        puntos = {
+        1: [(0, 0)],
+        2: [(-tam//4, -tam//4), (tam//4, tam//4)],
+        3: [(-tam//4, -tam//4), (0, 0), (tam//4, tam//4)],
+        4: [(-tam//4, -tam//4), (-tam//4, tam//4), (tam//4, -tam//4), (tam//4, tam//4)],
+        5: [(-tam//4, -tam//4), (-tam//4, tam//4), (0, 0), (tam//4, -tam//4), (tam//4, tam//4)],
+        6: [(-tam//4, -tam//4), (-tam//4, 0), (-tam//4, tam//4), (tam//4, -tam//4), (tam//4, 0), (tam//4, tam//4)]
+        }
+        for dx, dy in puntos.get(valor, []):
+            cx = x + tam//2 + dx
+            cy = y + tam//2 + dy
+            pygame.draw.circle(self.ventana, (35, 35, 40), (cx, cy), tam//10)
+
+    def dibujar_popup_competencia(self):
+        # Fondo semitransparente
+        s = pygame.Surface((1500, 900), pygame.SRCALPHA)
+        s.fill((0, 0, 0, 180))
+        self.ventana.blit(s, (0, 0))
+
+        # Pop‑up
+        pygame.draw.rect(self.ventana, (50, 55, 70), self.popup_competencia_rect, border_radius=20)
+        pygame.draw.rect(self.ventana, (200, 180, 100), self.popup_competencia_rect, 4, border_radius=20)
+
+        titulo = self.fuente_grande.render("¡COMPETENCIA!", True, (255, 215, 0))
+        self.ventana.blit(titulo, (self.popup_competencia_rect.centerx - titulo.get_width()//2, self.popup_competencia_rect.y + 20))
+
+        if self.competencia_jugadores:
+            idx1, idx2 = self.competencia_jugadores
+            nombre1 = self.jugadores[idx1]
+            nombre2 = self.jugadores[idx2]
+            texto1 = self.fuente_mediana.render(nombre1, True, (235, 237, 240))
+            texto2 = self.fuente_mediana.render(nombre2, True, (235, 237, 240))
+            self.ventana.blit(texto1, (self.popup_competencia_rect.x + 80, self.popup_competencia_rect.y + 100))
+            self.ventana.blit(texto2, (self.popup_competencia_rect.x + self.popup_competencia_rect.w - 80 - texto2.get_width(), self.popup_competencia_rect.y + 100))
+
+            if self.competencia_dados:
+                dado1, dado2 = self.competencia_dados
+                self._dibujar_dado(self.popup_competencia_rect.x + 80, self.popup_competencia_rect.y + 160, 60, dado1)
+                self._dibujar_dado(self.popup_competencia_rect.x + self.popup_competencia_rect.w - 80 - 60, self.popup_competencia_rect.y + 160, 60, dado2)
+            else:
+                self._dibujar_dado(self.popup_competencia_rect.x + 80, self.popup_competencia_rect.y + 160, 60, None)
+                self._dibujar_dado(self.popup_competencia_rect.x + self.popup_competencia_rect.w - 80 - 60, self.popup_competencia_rect.y + 160, 60, None)
+
+        # Mostrar mensaje de resultado
+        if self.competencia_resuelta:
+            if self.competencia_ganador is not None:
+                ganador_nombre = self.jugadores[self.competencia_ganador]
+                texto_res = self.fuente_mediana.render(f"¡{ganador_nombre} gana!", True, (100, 255, 100))
+            else:
+                texto_res = self.fuente_mediana.render("Empate, tira de nuevo", True, (255, 200, 100))
+            self.ventana.blit(texto_res, (self.popup_competencia_rect.x + self.popup_competencia_rect.w//2 - texto_res.get_width()//2, self.popup_competencia_rect.y + 280))
+
+        # --- BOTONES ---
+        # Botón según estado
+        if not self.competencia_resuelta:
+            pygame.draw.rect(self.ventana, (70, 75, 90), self.boton_tirar_competencia, border_radius=15)
+            texto_btn = self.fuente_mediana.render("Tirar Dados", True, (235, 237, 240))
+            self.ventana.blit(texto_btn, (self.boton_tirar_competencia.centerx - texto_btn.get_width()//2,
+                                          self.boton_tirar_competencia.y + 10))
+        else:
+            pygame.draw.rect(self.ventana, (100, 200, 100), self.boton_aceptar_competencia, border_radius=15)
+            texto_btn = self.fuente_mediana.render("Aceptar", True, (235, 237, 240))
+            self.ventana.blit(texto_btn, (self.boton_aceptar_competencia.centerx - texto_btn.get_width()//2,
+                                          self.boton_aceptar_competencia.y + 10))
+
+    #fin
+    def fin_juego(self):
+        ancho_boton = 200
+        alto_boton = 60
+        separacion = 30
+        total_ancho = ancho_boton * 2 + separacion
+        x_centro = 1500 // 2
+        y_centro = 900 // 2 + 160
+
+        self.boton_volver_jugar = pygame.Rect(
+            x_centro - total_ancho // 2,
+            500,
+            ancho_boton,
+            alto_boton
+        )
+        self.boton_volver_menu = pygame.Rect(
+            x_centro + separacion // 2,
+            500,
+            ancho_boton,
+            alto_boton
+        )
+        self.boton_volver_jugar_hover = False
+        self.boton_volver_menu_hover = False
+
+    def reiniciar_juego(self):
+        self.juego_terminado = False
+        self.estado = juego.estado_inicial(self.cantidad_jugadores)
+        self.mensaje = f"¡Comienza el juego! Turno de {self.jugadores[0]}"
+        self.jugadores_empate = None
+        self.mostrando_competencia = False
+        self.seleccionando_castigo = False
+        self.boton_volver_jugar = None
+        self.boton_volver_menu = None
+        self.tiempo_ultimo_auto = pygame.time.get_ticks()
+
+    def volver_menu(self):
+        self.pantalla_actual = "inicio"
+        self.juego_terminado = False
+        self.estado = None
+        self.jugadores = []
+        self.boton_volver_jugar = None
+        self.boton_volver_menu = None
+        self.mostrando_competencia = False
+        self.seleccionando_castigo = False
+        self.boton_tirar = None
+
+    def generar_estrellas(self):
+        """Genera posiciones aleatorias para el confeti animado"""
+        import random
+        self.estrellas = []
+        for _ in range(50):
+            self.estrellas.append({
+                'x': random.randint(0, 1500),
+                'y': random.randint(0, 900),
+                'vel': random.uniform(0.5, 2),
+                'tam': random.randint(3, 8),
+                'color': random.choice(self.colores['confeti']),
+                'rotacion': random.randint(0, 360)
+            })
+
+    def dibujar_fin_juego(self):
+        if not self.juego_terminado:
+            return
+        
+        # Actualizar animación
+        self.tiempo_animacion += 0.02
+        
+        # --- CONFETI ANIMADO ---
+        for estrella in self.estrellas:
+            # Movimiento hacia abajo
+            estrella['y'] += estrella['vel']
+            if estrella['y'] > 900:
+                estrella['y'] = -10
+                estrella['x'] = random.randint(0, 1500)
+                estrella['color'] = random.choice(self.colores['confeti'])
+            
+            # Rotación
+            estrella['rotacion'] += 2
+            
+            if estrella['tam'] > 5:
+                # Dibujar estrella
+                puntos = []
+                for i in range(10):
+                    angulo = estrella['rotacion'] + i * 36
+                    radio = estrella['tam'] if i % 2 == 0 else estrella['tam'] * 0.5
+                    x = estrella['x'] + radio * math.cos(math.radians(angulo))
+                    y = estrella['y'] + radio * math.sin(math.radians(angulo))
+                    puntos.append((x, y))
+                pygame.draw.polygon(self.ventana, estrella['color'], puntos)
+            else:
+                pygame.draw.circle(self.ventana, estrella['color'], 
+                                (int(estrella['x']), int(estrella['y'])), estrella['tam'])
+        
+        # --- CARTEL SIMPLE ---
+        ganador = self.estado.get('ganador')
+        if ganador is not None:
+            # Cartel más grande y simple
+            cartel_rect = pygame.Rect(1500//2 - 350, 200, 700, 400)
+            pygame.draw.rect(self.ventana, (50, 55, 70), cartel_rect, border_radius=20)
+            pygame.draw.rect(self.ventana, (255, 215, 0), cartel_rect, 6, border_radius=20)
+            
+            # Título
+            titulo = self.fuente_grande.render("¡FELICITACIONES!", True, (255, 215, 0))
+            titulo_rect = titulo.get_rect(center=(1500//2, 260))
+            self.ventana.blit(titulo, titulo_rect)
+            #self.jugadores[ganador] if ganador < len(self.jugadores) else f"Jugador {ganador + 1}"
+            # Nombre del ganador 
+            nombre = self.jugadores[ganador] if ganador < len(self.jugadores) else f"Jugador {ganador + 1}"
+            texto_ganador = self.fuente_titulo.render(nombre, True, (255, 255, 200))
+            texto_rect = texto_ganador.get_rect(center=(1500//2, 340))
+            self.ventana.blit(texto_ganador, texto_rect)
+            
+            # Subtítulo
+            subtitulo = self.fuente_mediana.render("¡ES EL GANADOR!", True, (255, 215, 0))
+            subtitulo_rect = subtitulo.get_rect(center=(1500//2, 400))
+            self.ventana.blit(subtitulo, subtitulo_rect)
+
+            # Botones
+            if self.boton_volver_jugar and self.boton_volver_menu:
+                # Botón "Volver a jugar"
+                color_jugar = (100, 200, 100) if not self.boton_volver_jugar_hover else (130, 230, 130)
+                pygame.draw.rect(self.ventana, color_jugar, self.boton_volver_jugar, border_radius=15)
+                texto = self.fuente_mediana.render("Volver a jugar", True, (235, 237, 240))
+                texto_rect = texto.get_rect(center=self.boton_volver_jugar.center)
+                self.ventana.blit(texto, texto_rect)
+                
+                # Botón "Menú"
+                color_menu = (200, 100, 100) if not self.boton_volver_menu_hover else (230, 130, 130)
+                pygame.draw.rect(self.ventana, color_menu, self.boton_volver_menu, border_radius=15)
+                texto = self.fuente_mediana.render("Menú", True, (235, 237, 240))
+                texto_rect = texto.get_rect(center=self.boton_volver_menu.center)
+                self.ventana.blit(texto, texto_rect)
+
+    # ---------- UTILIDAD ----------
+    def _dividir_texto(self, texto, fuente, ancho_max):
+        lineas = []
+        palabras = texto.split(' ')
+        linea_actual = ""
+        for palabra in palabras:
+            prueba = linea_actual + " " + palabra if linea_actual else palabra
+            if fuente.size(prueba)[0] <= ancho_max:
+                linea_actual = prueba
+            else:
+                if linea_actual:
+                    lineas.append(linea_actual)
+                linea_actual = palabra
+        if linea_actual:
+            lineas.append(linea_actual)
+        return lineas
+
+    def dibujar_pedir_nombres(self):
+        self.ventana.fill((30, 30, 50))
+        
+        # Título
+        titulo = self.fuente_grande.render("Ingresar Nombres", True, self.colores['dorado'])
+        titulo_rect = titulo.get_rect(center=(750, 150))  # Centrado porque ahora la pantalla es más ancha
+        self.ventana.blit(titulo, titulo_rect)
+        
+        # Instrucción
+        instruccion = self.fuente_mediana.render("Presiona ENTER para confirmar cada nombre", True, self.colores['texto'])
+        instruccion_rect = instruccion.get_rect(center=(750, 220))
+        self.ventana.blit(instruccion, instruccion_rect)
+        
+        # Campos de nombres
+        y = 280
+        for i in range(self.cantidad_jugadores):
+            # Color según si está activo
+            color = (255, 215, 0) if self.campo_activo == i else (200, 200, 200)
+            
+            # Mostrar cursor si está activo
+            if self.campo_activo == i and self.mostrar_cursor:
+                texto = self.fuente_mediana.render(f"Jugador {i+1}: {self.nombres_jugadores[i]}|", True, color)
+            else:
+                texto = self.fuente_mediana.render(f"Jugador {i+1}: {self.nombres_jugadores[i]}", True, color)
+            
+            # Cuadro de fondo para cada campo
+            campo_rect = pygame.Rect(350, y - 10, 600, 45)
+            if self.campo_activo == i:
+                pygame.draw.rect(self.ventana, (60, 65, 80), campo_rect, border_radius=8)
+                pygame.draw.rect(self.ventana, (255, 215, 0), campo_rect, 2, border_radius=8)
+            else:
+                pygame.draw.rect(self.ventana, (45, 48, 60), campo_rect, border_radius=8)
+                pygame.draw.rect(self.ventana, (80, 85, 100), campo_rect, 2, border_radius=8)
+            
+            self.ventana.blit(texto, (370, y))
+            y += 65
+        
+        # Botón "Empezar"
+        todos_completos = all(self.nombres_jugadores[:self.cantidad_jugadores])
+        self.boton_empezar = pygame.Rect(550, 550, 400, 60)
+        
+        if todos_completos:
+            pygame.draw.rect(self.ventana, (100, 200, 100), self.boton_empezar, border_radius=12)
+            texto = self.fuente_mediana.render("EMPEZAR JUEGO", True, (255, 255, 255))
+        else:
+            pygame.draw.rect(self.ventana, (80, 80, 80), self.boton_empezar, border_radius=12)
+            texto = self.fuente_mediana.render("Complete todos los nombres", True, (150, 150, 150))
+        texto_rect = texto.get_rect(center=self.boton_empezar.center)
+        self.ventana.blit(texto, texto_rect)
+        
+        # Botón "Volver"
+        self.boton_volver_nombres = pygame.Rect(550, 630, 400, 50)
+        pygame.draw.rect(self.ventana, (150, 50, 50), self.boton_volver_nombres, border_radius=12)
+        texto = self.fuente_mediana.render("Volver", True, self.colores['texto'])
+        texto_rect = texto.get_rect(center=self.boton_volver_nombres.center)
+        self.ventana.blit(texto, texto_rect)
