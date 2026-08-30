@@ -92,11 +92,13 @@ def registrar_efecto(clave):
 @registrar_efecto('P1')
 def aplicar_p1(estado, idx_jugador, idx_castigado):
     """Aplica el efecto P1: el jugador idx_jugador castiga a idx_castigado."""
-    nuevo_pierde_turno = list(estado['pierde_turno'])
-    nuevo_pierde_turno[idx_castigado] = True
+    nuevo_pierde = tuple(
+        True if i == idx_castigado else p
+        for i, p in enumerate(estado['pierde_turno'])
+    )
     return dict(
         estado,
-        pierde_turno=tuple(nuevo_pierde_turno),
+        pierde_turno=nuevo_pierde,
         mensaje=f"P1: Jugador {idx_jugador+1} castiga a Jugador {idx_castigado+1}"
     )
 

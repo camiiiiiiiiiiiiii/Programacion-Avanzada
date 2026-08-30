@@ -353,27 +353,27 @@ class JuegoGUI:
     def avanzar_turno(self):
         estado = self.estado
         total = len(estado['posiciones'])
-        siguiente = estado['actual']
+        actual = estado['actual']
 
-        # 1. Resetear flag del jugador actual si pierde el turno
-        if estado['pierde_turno'][siguiente]:
+        # Resetear el flag del jugador actual si pierde el turno (por si acaso)
+        if estado['pierde_turno'][actual]:
             nuevo_pierde = list(estado['pierde_turno'])
-            nuevo_pierde[siguiente] = False
+            nuevo_pierde[actual] = False
             estado = dict(estado, pierde_turno=tuple(nuevo_pierde))
 
-        # 2. Buscar el siguiente jugador que pueda jugar
-        for _ in range(total):
-            siguiente = (siguiente + 1) % total
-            if not estado['pierde_turno'][siguiente]:
-                self.estado = dict(estado, actual=siguiente)
-                # **NUEVO**: mensaje de turno
-                self.mensaje = f"Turno de {self.jugadores[siguiente]}"
-                return
-            else:
-                # Resetear flag del jugador que se salta
-                nuevo_pierde = list(estado['pierde_turno'])
-                nuevo_pierde[siguiente] = False
-                estado = dict(estado, pierde_turno=tuple(nuevo_pierde))
+        # Generar índices en orden circular a partir del siguiente
+        indices = [(actual + i) % total for i in range(1, total + 1)]
+        # Usar filter para obtener los que NO pierden turno
+        disponibles = list(filter(lambda i: not estado['pierde_turno'][i], indices))
+
+        if disponibles:
+            siguiente = disponibles[0]
+            self.estado = dict(estado, actual=siguiente)
+            self.mensaje = f"Turno de {self.jugadores[siguiente]}"
+        else:
+            # Si todos pierden el turno (caso extremo), no hacemos nada
+            self.mensaje = "Todos pierden el turno, reiniciando..."
+            self.estado = dict(estado, actual=actual)  # se mantiene el mismo
 
     # Pop-up resolver competencia:
     def resolver_competencia_popup(self):
