@@ -237,32 +237,6 @@ class JuegoGUI:
                     self.boton_hover = self.boton_tirar.collidepoint(evento.pos)
 
     # ---------- ACTUALIZAR ----------
-    # def actualizar(self):
-    #     if self.pantalla_actual == "juego":
-    #         ahora = pygame.time.get_ticks()
-    #
-    #         # --- Lógica automática de tiro de dado (fuera de competencia) ---
-    #         if self.modo_juego == "automatico" and not self.juego_terminado:
-    #             if not self.mostrando_competencia and not self.seleccionando_castigo:
-    #                 if ahora - self.tiempo_ultimo_auto > 1000:
-    #                     self.tirar_dado()
-    #                     self.tiempo_ultimo_auto = ahora
-    #
-    #         if self.mostrando_competencia and self.modo_juego == "interactivo":
-    #             # No hacer nada automático en modo interactivo
-    #             pass
-    #
-    #         # --- Lógica automática de competencia ---
-    #         if self.mostrando_competencia:
-    #             if not self.competencia_resuelta:
-    #                 # Empate o aún no se tiró: programar nuevo tiro
-    #                 if ahora > self.tiempo_proxima_accion:
-    #                     self.resolver_competencia_popup()
-    #             else:
-    #                 # Ya hay ganador: programar cierre
-    #                 if ahora > self.tiempo_proxima_accion:
-    #                     self.cerrar_competencia_popup()
-
     def actualizar(self):
         if self.pantalla_actual == "juego":
             ahora = pygame.time.get_ticks()
@@ -293,11 +267,9 @@ class JuegoGUI:
         dado = random.randint(1, 6)
 
         # Composición: mover y aplicar efecto (excepto P1 interactivo)
-        # Primero movemos para saber si caemos en P1
         estado_movido = juego.mover_jugador(estado, idx, dado)
         pos = estado_movido['posiciones'][idx]
         if pos in CELDAS_ESPECIALES and CELDAS_ESPECIALES[pos] == 'P1' and self.modo_juego == "interactivo":
-            # Guardamos el estado movido y mostramos pop-up
             self.estado = estado_movido
             self.estado['valor_del_dado'] = dado
             self.mensaje = f"Jugador {idx+1} sacó {dado}"
@@ -306,9 +278,14 @@ class JuegoGUI:
         else:
             self.estado = juego.mover_y_aplicar_efecto(estado, idx, dado)
             self.estado['valor_del_dado'] = dado
-            mensaje_estado = self.estado.get('mensaje')
-            if mensaje_estado:
-                self.mensaje = mensaje_estado
+            # Determinar si hubo efecto especial
+            pos = self.estado['posiciones'][idx]
+            if pos in CELDAS_ESPECIALES:
+                mensaje_estado = self.estado.get('mensaje')
+                if mensaje_estado:
+                    self.mensaje = mensaje_estado
+                else:
+                    self.mensaje = f"Jugador {idx+1} sacó {dado}"
             else:
                 self.mensaje = f"Jugador {idx+1} sacó {dado}"
 
@@ -324,7 +301,6 @@ class JuegoGUI:
             self.estado['ganador'] = idx
             return
 
-        # Avanzar turno
         self.avanzar_turno()
 
     def iniciar_competencia(self, idx_jugador):
@@ -409,7 +385,8 @@ class JuegoGUI:
             siguiente = (siguiente + 1) % total
             if not estado['pierde_turno'][siguiente]:
                 self.estado = dict(estado, actual=siguiente)
-                # NO SOBRESCRIBIMOS self.mensaje AQUÍ
+                # **NUEVO**: mensaje de turno
+                self.mensaje = f"Turno de {self.jugadores[siguiente]}"
                 return
             else:
                 # Resetear flag del jugador que se salta

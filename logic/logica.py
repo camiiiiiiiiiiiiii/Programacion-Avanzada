@@ -19,8 +19,6 @@ def estado_inicial(cant_jugadores: int) -> dict:
 # Movimiento:
 @log
 def mover_jugador(estado: dict, idx_jugador: int, pasos_a_avanzar: int, profundidad: int = 0) -> dict:
-
-
     ''' Caso especial: si nos pasamos de las 35 casillas, significa que el jugador ganó.
         Decidimos que el programa tome la posición 35 para indicar que el jugador ganó,
         por lo que debemos setear la posición en 35.'''
