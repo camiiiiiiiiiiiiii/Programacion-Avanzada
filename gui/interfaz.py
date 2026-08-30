@@ -355,25 +355,30 @@ class JuegoGUI:
         total = len(estado['posiciones'])
         actual = estado['actual']
 
-        # Resetear el flag del jugador actual si pierde el turno (por si acaso)
+        # 1. Resetear flag del jugador actual si pierde el turno (por si acaso)
         if estado['pierde_turno'][actual]:
             nuevo_pierde = list(estado['pierde_turno'])
             nuevo_pierde[actual] = False
             estado = dict(estado, pierde_turno=tuple(nuevo_pierde))
 
-        # Generar índices en orden circular a partir del siguiente
-        indices = [(actual + i) % total for i in range(1, total + 1)]
-        # Usar filter para obtener los que NO pierden turno
-        disponibles = list(filter(lambda i: not estado['pierde_turno'][i], indices))
+        # 2. Buscar el siguiente jugador que pueda jugar (desde el siguiente del actual)
+        siguiente = (actual + 1) % total
+        for _ in range(total):
+            if estado['pierde_turno'][siguiente]:
+                # Resetear flag del jugador que se salta
+                nuevo_pierde = list(estado['pierde_turno'])
+                nuevo_pierde[siguiente] = False
+                estado = dict(estado, pierde_turno=tuple(nuevo_pierde))
+            else:
+                # Este jugador puede jugar
+                self.estado = dict(estado, actual=siguiente)
+                self.mensaje = f"Turno de {self.jugadores[siguiente]}"
+                return
+            siguiente = (siguiente + 1) % total
 
-        if disponibles:
-            siguiente = disponibles[0]
-            self.estado = dict(estado, actual=siguiente)
-            self.mensaje = f"Turno de {self.jugadores[siguiente]}"
-        else:
-            # Si todos pierden el turno (caso extremo), no hacemos nada
-            self.mensaje = "Todos pierden el turno, reiniciando..."
-            self.estado = dict(estado, actual=actual)  # se mantiene el mismo
+        # Si todos pierden el turno (caso extremo), no hacemos nada
+        self.mensaje = "Todos pierden el turno, reiniciando..."
+        self.estado = dict(estado, actual=actual)
 
     # Pop-up resolver competencia:
     def resolver_competencia_popup(self):

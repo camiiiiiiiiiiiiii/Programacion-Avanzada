@@ -41,14 +41,12 @@ class TestP1PierdeTurno(unittest.TestCase):
         estado = mover_jugador(estado, 0, 5)
         estado = aplicar_efecto_celda_especial(estado, 0, idx_castigado=idx_castigado)
 
-        # Simulamos que el turno avanza al jugador castigado (aunque en realidad se saltaría)
-        # Esto fuerza al generador a empezar en el castigado y comprobar que lo salta.
+        # Simular que el turno pasa al jugador castigado (para que el generador empiece en él)
         estado = dict(estado, actual=idx_castigado)
 
         gen = generador_turnos(estado)
         siguiente = next(gen)
-        # Ahora el generador empieza en el castigado (1), lo salta, y devuelve el siguiente disponible.
-        # Con 3 jugadores, el siguiente disponible es 2 (porque 1 pierde turno).
+        # El generador empieza en el castigado (1), lo salta y devuelve el siguiente disponible (2)
         self.assertEqual(siguiente, 2)
 
     def test_reseteo_despues_de_saltar(self):
