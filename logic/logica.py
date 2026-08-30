@@ -146,3 +146,26 @@ def aplicar_efecto_celda_especial(estado: dict, idx_jugador: int, nuevo_dado: in
 
     # Llamamos a la función pasando los argumentos fijos y extras en kwargs
     return func(estado, idx_jugador, nuevo_dado=nuevo_dado)
+
+def generador_turnos(estado):
+    """
+    Generador infinito que devuelve el índice del siguiente jugador que puede jugar
+    (salta a los que tienen pierde_turno=True).
+    """
+    n = len(estado['posiciones'])
+    idx = estado['actual']
+    while True:
+        if not estado['pierde_turno'][idx]:
+            yield idx
+        idx = (idx + 1) % n
+
+def mover_y_aplicar_efecto(estado, idx, pasos, nuevo_dado=None, idx_castigado=None):
+    """
+    Compone mover_jugador + aplicar_efecto_celda_especial.
+    Primero mueve al jugador y, si la nueva posición es especial, aplica el efecto.
+    """
+    estado = mover_jugador(estado, idx, pasos)
+    pos = estado['posiciones'][idx]
+    if pos in CELDAS_ESPECIALES:
+        estado = aplicar_efecto_celda_especial(estado, idx, nuevo_dado, idx_castigado)
+    return estado

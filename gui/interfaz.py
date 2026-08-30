@@ -268,35 +268,37 @@ class JuegoGUI:
         estado = self.estado
         idx = estado['actual']
         dado = random.randint(1, 6)
-        self.estado = juego.mover_jugador(estado, idx, dado)
-        self.estado['valor_del_dado'] = dado
-        self.mensaje = f"Jugador {idx+1} sacó {dado}"
 
+        # Composición: mover y aplicar efecto (excepto P1 interactivo)
+        # Primero movemos para saber si caemos en P1
+        estado_movido = juego.mover_jugador(estado, idx, dado)
+        pos = estado_movido['posiciones'][idx]
+        if pos in CELDAS_ESPECIALES and CELDAS_ESPECIALES[pos] == 'P1' and self.modo_juego == "interactivo":
+            # Guardamos el estado movido y mostramos pop-up
+            self.estado = estado_movido
+            self.estado['valor_del_dado'] = dado
+            self.mensaje = f"Jugador {idx+1} sacó {dado}"
+            self.iniciar_seleccion_castigo(idx)
+            return
+        else:
+            # Usamos la composición para el resto (incluye movimiento + efecto)
+            self.estado = juego.mover_y_aplicar_efecto(estado, idx, dado)
+            self.estado['valor_del_dado'] = dado
+            self.mensaje = self.estado.get('mensaje', f"Jugador {idx+1} sacó {dado}")
+
+        # Verificar competencia
         if juego.checkear_si_hay_competencia(self.estado, idx):
-            self.resolver_competencia(idx)
+            self.iniciar_competencia(idx)
+            return
 
-        pos = self.estado['posiciones'][idx]
-
-        if pos in CELDAS_ESPECIALES:
-            clave = CELDAS_ESPECIALES[pos]
-            if clave == 'P1' and self.modo_juego == "interactivo":
-                # Modo interactivo: mostrar pop-up y salir
-                self.iniciar_seleccion_castigo(idx)
-                return  # No avanzar turno aún
-            else:
-                # Modo automático o efectos que no requieren selección
-                nuevo_dado = None
-                if clave == 'P2':
-                    nuevo_dado = random.randint(1, 6)
-                self.estado = juego.aplicar_efecto_celda_especial(self.estado, idx, nuevo_dado)
-                self.mensaje = self.estado.get('mensaje', self.mensaje)
-
+        # Verificar si ganó
         if self.estado['posiciones'][idx] >= PUNTUACION_PARA_GANAR:
             self.juego_terminado = True
             self.mensaje = f"¡Jugador {idx+1} ha ganado!"
             self.estado['ganador'] = idx
             return
 
+        # Avanzar turno
         self.avanzar_turno()
 
     def iniciar_competencia(self, idx_jugador):
@@ -347,16 +349,20 @@ class JuegoGUI:
 
     def avanzar_turno(self):
         estado = self.estado
-        total = len(estado['posiciones'])
-        siguiente = (estado['actual'] + 1) % total
-        for _ in range(total):
-            if not estado['pierde_turno'][siguiente]:
+        # Crear un generador que empiece desde el actual
+        gen = juego.generador_turnos(estado)
+        # Consumimos hasta que el siguiente sea distinto al actual (o hasta que sea el mismo, pero ya lo saltamos)
+        siguiente = None
+        for _ in range(len(estado['posiciones']) + 1):  # límite de seguridad
+            sig = next(gen)
+            if sig != estado['actual']:
+                siguiente = sig
                 break
-            nuevo_pierde = list(estado['pierde_turno'])
-            nuevo_pierde[siguiente] = False
-            estado = dict(estado, pierde_turno=tuple(nuevo_pierde))
-            siguiente = (siguiente + 1) % total
-        self.estado = dict(estado, actual=siguiente)
+        if siguiente is not None:
+            self.estado = dict(estado, actual=siguiente)
+        else:
+            # Si no se encuentra (no debería pasar), nos quedamos con el mismo
+            pass
 
     # Pop-up resolver competencia:
     def resolver_competencia_popup(self):
