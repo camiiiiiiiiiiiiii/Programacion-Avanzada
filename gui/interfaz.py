@@ -135,7 +135,7 @@ class JuegoGUI:
             self.dibujar()
             self.reloj.tick(60)
 
-    # ---------- EVENTOS (igual que antes) ----------
+    # ---------- EVENTOS ----------
     def procesar_eventos(self):
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
@@ -227,6 +227,11 @@ class JuegoGUI:
                             self.aplicar_castigo(idx)
                             return
             return  # No procesar otros eventos durante selección
+
+        if evento.type == pygame.KEYDOWN and evento.key == pygame.K_SPACE:
+            if self.modo_juego == "interactivo" and not self.juego_terminado:
+                self.tirar_dado()
+                return
 
         if self.modo_juego == "interactivo":
             if evento.type == pygame.MOUSEBUTTONDOWN:
@@ -344,30 +349,6 @@ class JuegoGUI:
 
         if self.modo_juego == "automatico":
             self.tiempo_proxima_accion = pygame.time.get_ticks() + 1500
-
-    # def resolver_competencia(self, idx_jugador):
-    #     estado = self.estado
-    #     pos = estado['posiciones'][idx_jugador]
-    #     otro = None
-    #     for i, p in enumerate(estado['posiciones']):
-    #         if i != idx_jugador and p == pos:
-    #             otro = i
-    #             break
-    #     if otro is None:
-    #         return
-    #
-    #     dado1 = random.randint(1, 6)
-    #     dado2 = random.randint(1, 6)
-    #     self.mensaje = f"Competencia: J{idx_jugador+1} ({dado1}) vs J{otro+1} ({dado2})"
-    #
-    #     nuevo_estado = juego.resolver_competencia(estado, idx_jugador, otro, dado1, dado2)
-    #     self.estado = nuevo_estado
-    #
-    #     if nuevo_estado.get('competencia_empate', False):
-    #         self.mensaje = "Empate, se repite la competencia"
-    #         self.resolver_competencia(idx_jugador)
-    #     else:
-    #         self.mensaje = nuevo_estado.get('mensaje', self.mensaje)
 
     def avanzar_turno(self):
         estado = self.estado
