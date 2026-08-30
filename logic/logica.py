@@ -1,6 +1,6 @@
 from logic.datos_tablero import PUNTUACION_PARA_GANAR, CELDAS_ESPECIALES
 from logic.utilidades import log
-from functools import reduce
+import random
 # Estado inicial:
 #   - todos los jugadores arrancan en la posición 0 (celda[9][0])
 #   - ninguno pierde el turno -> pierde_turno = False xa cada jugador
@@ -59,7 +59,7 @@ def resolver_competencia(estado: dict, idx_jugador_1: int, idx_jugador_2: int, d
     else:
         return dict(estado, competencia_empate = True, mensaje = "Empate en competencia. Tirar de nuevo.")
 
-    nuevo_estado = mover_jugador(estado, ganador, perdedor, -2)
+    nuevo_estado = mover_jugador(estado, perdedor, -2)
 
     mensaje = f"Competencia: Jugador {ganador + 1} ({dado1}) vs Jugador {perdedor + 1} ({dado2}). Jugador {ganador + 1} gana!"
 
@@ -87,7 +87,6 @@ def aplicar_p1(estado, idx_jugador, idx_castigado):
     """Aplica el efecto P1: el jugador idx_jugador castiga a idx_castigado."""
     nuevo_pierde_turno = list(estado['pierde_turno'])
     nuevo_pierde_turno[idx_castigado] = True
-
     return dict(
         estado,
         pierde_turno=tuple(nuevo_pierde_turno),
@@ -123,15 +122,27 @@ def aplicar_c2(estado, idx_jugador, **kwargs):
     return dict(nuevo_estado, mensaje=f"C2: Jugador {idx_jugador+1} retrodece 3 lugares")
 
 @log
-def aplicar_efecto_celda_especial(estado: dict, idx_jugador: int, nuevo_dado: int = None) -> dict:
+def aplicar_efecto_celda_especial(estado: dict, idx_jugador: int, nuevo_dado: int = None, idx_castigado: int = None) -> dict:
     posicion = estado['posiciones'][idx_jugador]
-    clave = CELDAS_ESPECIALES[posicion]   # ej: 'P1', 'C2', etc.
+    clave = CELDAS_ESPECIALES[posicion]
 
     # Buscar la función en el registro
     func = EFECTOS_REGISTRY.get(clave)
     if func is None:
         # Si no hay efecto, devolvemos el estado sin cambios
         return estado
+
+    # Caso especial: P1. Necesitamos un idx_castigado. Si no se pasa (modo auto) se genera random
+    if clave == 'P1':
+        # Si no se proporciona idx_castigado, elegir uno al azar (modo automático)
+        if idx_castigado is None:
+            posibles = [i for i in range(len(estado['posiciones'])) if i != idx_jugador]
+            if posibles:
+                idx_castigado = random.choice(posibles)
+            else:
+                # No hay otros jugadores, no se puede castigar
+                return estado
+        return func(estado, idx_jugador, idx_castigado)
 
     # Llamamos a la función pasando los argumentos fijos y extras en kwargs
     return func(estado, idx_jugador, nuevo_dado=nuevo_dado)

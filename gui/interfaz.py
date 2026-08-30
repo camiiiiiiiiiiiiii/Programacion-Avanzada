@@ -126,7 +126,8 @@ class JuegoGUI:
 
         # ----- SELECCIÓN DE CASTIGO (P1) -----
         self.seleccionando_castigo = False
-        self.rects_cuadrantes = []   # para detectar clic en jugadores
+        self.jugador_castigador = None  # idx del jugador que está en P1
+        self.botones_castigo = []       # lista de rects para cada opción
 
     def ejecutar(self):
         while True:
@@ -211,6 +212,24 @@ class JuegoGUI:
                     else:
                         self.cerrar_competencia_popup()
             return  # No procesar otros eventos
+
+        if self.seleccionando_castigo:
+            if evento.type == pygame.MOUSEBUTTONDOWN:
+                for rect, idx in self.botones_castigo:
+                    if rect.collidepoint(evento.pos):
+                        self.aplicar_castigo(idx)
+                        return
+            elif evento.type == pygame.KEYDOWN:
+                # Teclas numéricas 1-4 para seleccionar
+                if evento.key in [pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4]:
+                    num = evento.key - pygame.K_1  # 0-indexado
+                    # Buscar el jugador con ese número (idx+1)
+                    for idx in self.opciones_castigo:
+                        if idx == num:
+                            self.aplicar_castigo(idx)
+                            return
+            return  # No procesar otros eventos durante selección
+
         if self.modo_juego == "interactivo":
             if evento.type == pygame.MOUSEBUTTONDOWN:
                 if self.boton_tirar and self.boton_tirar.collidepoint(evento.pos) and not self.juego_terminado:
@@ -256,13 +275,20 @@ class JuegoGUI:
             self.resolver_competencia(idx)
 
         pos = self.estado['posiciones'][idx]
+
         if pos in CELDAS_ESPECIALES:
             clave = CELDAS_ESPECIALES[pos]
-            nuevo_dado = None
-            if clave == 'P2':
-                nuevo_dado = random.randint(1, 6)
-            self.estado = juego.aplicar_efecto_celda_especial(self.estado, idx, nuevo_dado)
-            self.mensaje = self.estado.get('mensaje', self.mensaje)
+            if clave == 'P1' and self.modo_juego == "interactivo":
+                # Modo interactivo: mostrar pop-up y salir
+                self.iniciar_seleccion_castigo(idx)
+                return  # No avanzar turno aún
+            else:
+                # Modo automático o efectos que no requieren selección
+                nuevo_dado = None
+                if clave == 'P2':
+                    nuevo_dado = random.randint(1, 6)
+                self.estado = juego.aplicar_efecto_celda_especial(self.estado, idx, nuevo_dado)
+                self.mensaje = self.estado.get('mensaje', self.mensaje)
 
         if self.estado['posiciones'][idx] >= PUNTUACION_PARA_GANAR:
             self.juego_terminado = True
@@ -270,6 +296,15 @@ class JuegoGUI:
             self.estado['ganador'] = idx
             return
 
+        self.avanzar_turno()
+
+    def continuar_despues_castigo(self):
+        idx = self.estado['actual']
+        if self.estado['posiciones'][idx] >= PUNTUACION_PARA_GANAR:
+            self.juego_terminado = True
+            self.mensaje = f"¡Jugador {idx+1} ha ganado!"
+            self.estado['ganador'] = idx
+            return
         self.avanzar_turno()
 
     def iniciar_competencia(self, idx_jugador):
@@ -357,8 +392,76 @@ class JuegoGUI:
     def cerrar_competencia_popup(self):
         self.mostrando_competencia = False
         idx = self.estado['actual'] # Jugador actual (el q generó la competencia)
-        self._procesar_turno(idx)
+        self.avanzar_turno()
 
+    def iniciar_seleccion_castigo(self, idx_jugador):
+        """Inicia el pop-up para elegir a quién castigar."""
+        self.seleccionando_castigo = True
+        self.jugador_castigador = idx_jugador
+        # Obtener índices de los otros jugadores
+        otros = [i for i in range(len(self.estado['posiciones'])) if i != idx_jugador]
+        self.opciones_castigo = otros
+        # Crear rects para los botones en el pop-up
+        self.botones_castigo = []
+        # El pop-up estará centrado, con un botón por jugador
+        # Posicionaremos los botones en una columna o fila según cantidad
+        # Para simplificar, usaremos una columna vertical
+        popup_ancho = 500
+        popup_alto = 100 + len(otros) * 70
+        popup_x = 1500//2 - popup_ancho//2
+        popup_y = 900//2 - popup_alto//2
+        self.popup_castigo_rect = pygame.Rect(popup_x, popup_y, popup_ancho, popup_alto)
+        for i, idx in enumerate(otros):
+            btn_rect = pygame.Rect(popup_x + 50, popup_y + 80 + i*70, popup_ancho - 100, 50)
+            self.botones_castigo.append((btn_rect, idx))
+
+    def aplicar_castigo(self, idx_castigado):
+        """Aplica el castigo al jugador seleccionado."""
+        idx_jugador = self.jugador_castigador
+        self.estado = juego.aplicar_efecto_celda_especial(self.estado, idx_jugador, idx_castigado=idx_castigado)
+        self.mensaje = self.estado.get('mensaje', self.mensaje)
+        self.seleccionando_castigo = False
+        # Verificar si el jugador actual ganó (aunque no se movió, por si acaso)
+        if self.estado['posiciones'][idx_jugador] >= PUNTUACION_PARA_GANAR:
+            self.juego_terminado = True
+            self.mensaje = f"¡Jugador {idx_jugador+1} ha ganado!"
+            self.estado['ganador'] = idx_jugador
+            return
+        self.avanzar_turno()
+
+    def dibujar_popup_castigo(self):
+        """Dibuja el pop-up de selección de castigo."""
+        if not self.seleccionando_castigo:
+            return
+        # Fondo semitransparente
+        s = pygame.Surface((1500, 900), pygame.SRCALPHA)
+        s.fill((0, 0, 0, 180))
+        self.ventana.blit(s, (0, 0))
+
+        # Rectángulo del pop-up
+        pygame.draw.rect(self.ventana, (50, 55, 70), self.popup_castigo_rect, border_radius=20)
+        pygame.draw.rect(self.ventana, (200, 180, 100), self.popup_castigo_rect, 4, border_radius=20)
+
+        # Título
+        titulo = self.fuente_grande.render("¡Elige a quién castigar!", True, (255, 215, 0))
+        self.ventana.blit(titulo, (self.popup_castigo_rect.x + self.popup_castigo_rect.w//2 - titulo.get_width()//2,
+                                   self.popup_castigo_rect.y + 20))
+
+        # Botones para cada jugador
+        for rect, idx in self.botones_castigo:
+            # Color de fondo según el jugador
+            color = self.colores_jugadores[idx % len(self.colores_jugadores)]
+            # Hacerlo más claro para el botón
+            color_btn = tuple(min(255, c + 60) for c in color)
+            pygame.draw.rect(self.ventana, color_btn, rect, border_radius=10)
+            pygame.draw.rect(self.ventana, (80, 85, 100), rect, 2, border_radius=10)
+            # Nombre del jugador
+            nombre = self.jugadores[idx]
+            texto = self.fuente_mediana.render(nombre, True, (235, 237, 240))
+            self.ventana.blit(texto, (rect.x + 10, rect.y + 10))
+            # Número (para selección por teclado)
+            num_texto = self.fuente_pequena.render(f"[{idx+1}]", True, (200, 200, 210))
+            self.ventana.blit(num_texto, (rect.x + rect.w - 40, rect.y + 10))
 
     # ---------- DIBUJO ----------
     def dibujar(self):
@@ -516,6 +619,9 @@ class JuegoGUI:
         if self.mostrando_competencia:
             self.dibujar_popup_competencia()
 
+        if self.seleccionando_castigo:
+            self.dibujar_popup_castigo()
+
     # ---------- DIBUJAR TABLERO ----------
     def dibujar_tablero(self):
         tablero_rect = pygame.Rect(self.tablero_x - 10, self.tablero_y - 10,
@@ -657,14 +763,14 @@ class JuegoGUI:
 
     # ---------- DIBUJAR DADO (privado) ----------
     def _dibujar_dado(self, x, y, tam, valor = None):
-        if valor is None:
-            # Mostrar "?"
-            dado_rect = pygame.Rect(x, y, tam, tam)
-            pygame.draw.rect(self.ventana, (200, 200, 200), dado_rect, border_radius=12)
-            pygame.draw.rect(self.ventana, (90, 98, 115), dado_rect, 3, border_radius=12)
-            texto = self.fuente_grande.render("?", True, (50, 50, 50))
-            self.ventana.blit(texto, (x + tam//2 - texto.get_width()//2, y + tam//2 - texto.get_height()//2))
-            return
+        # if valor is None:
+        #     # Mostrar "?"
+        #     dado_rect = pygame.Rect(x, y, tam, tam)
+        #     pygame.draw.rect(self.ventana, (200, 200, 200), dado_rect, border_radius=12)
+        #     pygame.draw.rect(self.ventana, (90, 98, 115), dado_rect, 3, border_radius=12)
+        #     texto = self.fuente_grande.render("?", True, (50, 50, 50))
+        #     self.ventana.blit(texto, (x + tam//2 - texto.get_width()//2, y + tam//2 - texto.get_height()//2))
+        #     return
 
         valor = 1
         if self.estado and self.estado.get('valor_del_dado') is not None:
